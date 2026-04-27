@@ -1,0 +1,19 @@
+# Environnement
+.env
+*.env.local
+
+# Dépendances
+node_modules/
+npm-debug.log*
+
+# Logs
+logs/
+*.log
+
+# Uploads
+uploads/*
+!uploads/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db

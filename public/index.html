@@ -1,0 +1,2387 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>lexpert — Gestion des Crédits Clients</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<style>
+/* ════════════════════════════════════════
+   DESIGN TOKENS
+════════════════════════════════════════ */
+:root {
+  --bg:           #f4f1eb;
+  --bg2:          #ede9e0;
+  --surface:      #ffffff;
+  --surface2:     #f8f6f1;
+  --warn:         #15998e;
+  --accent:       #16040f;
+  --ink:          #311027;
+  --ink2:         #5c5248;
+  --ink3:         #9c9188;
+  --accent:       #2b071c;
+  --accent2:      hsl(325, 94%, 6%);
+  --accent-soft:  #fdf0ea;
+  --gold:         #c49a2a;
+  --success:      #276844;
+  --success-soft: #e6f4ec;
+  --warn:         #15998e;
+  --warn-soft:    #fff4e0;
+  --danger:       #a31c1c;
+  --danger-soft:  #fdeaea;
+  --border:       #ddd8cf;
+  --border2:      #c8c2b6;
+  --radius:       14px;
+  --radius-sm:    8px;
+  --radius-xs:    5px;
+  --shadow:       0 2px 16px rgba(24,20,15,0.07);
+  --shadow-lg:    0 10px 40px rgba(24,20,15,0.14);
+  --font-serif:   'Playfair Display', Georgia, serif;
+  --font-body:    'Inter', system-ui, sans-serif;
+  --transition:   0.2s cubic-bezier(.4,0,.2,1);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--accent);
+  min-height: 100vh;
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ════════════════════════════════════════
+   AUTH SCREEN
+════════════════════════════════════════ */
+#auth-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: stretch;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: var(--ink);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+#auth-screen.hiding {
+  opacity: 0;
+  transform: scale(1.03);
+  pointer-events: none;
+}
+
+.auth-left {
+  flex: 1;
+  background: var(--ink);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 48px;
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-left::before {
+  content: '';
+  position: absolute;
+  top: -30%;
+  right: -20%;
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(184,58,10,0.18) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.auth-left::after {
+  content: '';
+  position: absolute;
+  bottom: -20%;
+  left: -20%;
+  width: 400px;
+  height: 400px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(196,154,42,0.1) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.auth-brand {
+  text-align: center;
+  z-index: 1;
+}
+
+.auth-brand-logo {
+  width: 80px;
+  height: 80px;
+  border-radius: 50px;
+  background: var(--box-shadow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 40px;
+  font-family: var(--font-serif);
+  font-size: 32px;
+  color: white;
+  font-weight: 600;
+  overflow: hidden;
+  box-shadow: 0 4px 40px rgba(255, 255, 255, 0.4);
+}
+
+.auth-brand-logo img { width: 100%; height: 100%; object-fit: cover; border-radius: 20px; }
+
+.auth-brand h1 {
+  font-family: var(--font-serif);
+  font-size: 42px;
+  font-weight: 400;
+  color: #fff;
+  line-height: 1;
+  letter-spacing: -1px;
+  margin-bottom: 12px;
+}
+
+.auth-brand p {
+  font-size: 13px;
+  color: rgba(255,255,255,0.4);
+  font-weight: 300;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.auth-features {
+  margin-top: 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  z-index: 1;
+  width: 100%;
+  max-width: 320px;
+}
+
+.auth-feature {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: rgba(255,255,255,0.5);
+  font-size: 13px;
+}
+
+.auth-feature-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 16px;
+}
+
+/* Auth Right — Login form */
+.auth-right {
+  width: 480px;
+  flex-shrink: 0;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 52px;
+}
+
+.auth-form-wrap { width: 100%; max-width: 360px; }
+
+.auth-form-title {
+  font-family: var(--font-serif);
+  font-size: 28px;
+  font-weight: 400;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.auth-form-sub {
+  font-size: 13px;
+  color: var(--ink3);
+  margin-bottom: 36px;
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 28px;
+  border-bottom: 1.5px solid var(--border);
+}
+
+.auth-tab {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink3);
+  background: none;
+  border: none;
+  border-bottom: 2.5px solid transparent;
+  padding: 10px 20px 10px 0;
+  cursor: pointer;
+  margin-bottom: -1.5px;
+  transition: color var(--transition);
+}
+
+.auth-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.auth-pane { display: none; }
+.auth-pane.active { display: block; }
+
+.field {
+  margin-bottom: 18px;
+}
+
+.field-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink2);
+  margin-bottom: 6px;
+}
+
+.field input {
+  width: 100%;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 11px 14px;
+  outline: none;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.field input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(184,58,10,0.1);
+}
+
+.field input::placeholder { color: var(--ink3); }
+
+.field-error {
+  font-size: 12px;
+  color: var(--danger);
+  margin-top: 5px;
+  display: none;
+}
+
+.field.has-error input { border-color: var(--danger); }
+.field.has-error .field-error { display: block; }
+
+.auth-submit {
+  width: 100%;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 13px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  transition: background var(--transition), transform var(--transition), box-shadow var(--transition);
+  margin-top: 8px;
+  letter-spacing: 0.02em;
+}
+
+.auth-submit:hover {
+  background: var(--accent2);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(184,58,10,0.3);
+}
+
+.auth-submit:active { transform: translateY(0); }
+
+.auth-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.auth-error-box {
+  background: var(--danger-soft);
+  border: 1px solid #f5c6c6;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--danger);
+  margin-bottom: 18px;
+  display: none;
+}
+
+.auth-error-box.visible { display: block; }
+
+.auth-demo-hint {
+  margin-top: 28px;
+  padding: 14px 16px;
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--ink2);
+  line-height: 1.7;
+}
+
+.auth-demo-hint strong { color: var(--ink); font-weight: 600; }
+
+.auth-hint-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.auth-hint-chip {
+  font-family: var(--font-body);
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: none;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background var(--transition);
+}
+
+.auth-hint-chip:hover { background: #fbe3d8; }
+
+@media (max-width: 840px) {
+  .auth-left { display: none; }
+  .auth-right { width: 100%; padding: 40px 28px; }
+}
+
+/* ════════════════════════════════════════
+   MAIN APP
+════════════════════════════════════════ */
+#app { display: none; }
+#app.visible { display: block; }
+
+/* HEADER */
+header {
+  background: var(--ink);
+  color: white;
+  padding: 0 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 62px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 20px rgba(0,0,0,0.25);
+}
+
+.header-brand { display: flex; align-items: center; gap: 14px; }
+
+.header-logo {
+  width: 36px; height: 36px;
+  border-radius: 9px;
+  background: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-serif);
+  font-size: 17px; color: white;
+  overflow: hidden;
+}
+
+.header-logo img { width: 100%; height: 100%; object-fit: cover; border-radius: 9px; }
+
+.header-title h1 {
+  font-family: var(--font-serif);
+  font-size: 18px; font-weight: 400;
+  color: white; line-height: 1.1;
+  letter-spacing: -0.3px;
+}
+
+.header-title p {
+  font-size: 10px;
+  color: rgba(255,255,255,0.4);
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.header-right { display: flex; align-items: center; gap: 16px; }
+
+.header-info { font-size: 11px; color: rgba(255,255,255,0.4); text-align: right; line-height: 1.5; }
+
+.header-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 12px 5px 5px;
+  border-radius: 99px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.1);
+  cursor: pointer;
+  transition: background var(--transition);
+  position: relative;
+}
+
+.header-user:hover { background: rgba(255,255,255,0.12); }
+
+.header-avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; color: white;
+}
+
+.header-user-name { font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.85); }
+
+.user-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+  min-width: 180px;
+  display: none;
+  z-index: 200;
+}
+
+.user-dropdown.open { display: block; animation: fadeDown 0.15s ease; }
+
+@keyframes fadeDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius-xs);
+  font-size: 13px;
+  color: var(--ink2);
+  cursor: pointer;
+  transition: background var(--transition);
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+}
+
+.dropdown-item:hover { background: var(--bg); color: var(--ink); }
+.dropdown-item.danger { color: var(--danger); }
+.dropdown-item.danger:hover { background: var(--danger-soft); }
+.dropdown-divider { height: 1px; background: var(--border); margin: 4px 0; }
+
+/* NAV */
+nav {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  padding: 0 32px;
+  overflow-x: auto;
+  gap: 0;
+}
+
+nav button {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink3);
+  background: none;
+  border: none;
+  border-bottom: 2.5px solid transparent;
+  padding: 14px 18px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--transition);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+nav button .nav-icon { font-size: 14px; }
+nav button:hover { color: var(--ink); }
+nav button.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ROLE badge in nav */
+.role-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 99px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  margin-left: 8px;
+}
+
+/* MAIN */
+main { max-width: 1120px; margin: 0 auto; padding: 32px 24px 60px; }
+
+.tab { display: none; }
+.tab.active { display: block; animation: slideUp 0.22s ease; }
+
+@keyframes slideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+.tab > h2 {
+  font-family: var(--font-serif);
+  font-size: 26px; font-weight: 400;
+  color: var(--ink);
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tab > h2::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* CARDS */
+.card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  padding: 24px;
+  box-shadow: var(--shadow);
+}
+
+.card h3 {
+  font-family: var(--font-serif);
+  font-size: 16px; font-weight: 400;
+  color: var(--ink);
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.table-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  margin-top: 24px;
+}
+
+.table-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.table-card-header h3 {
+  font-family: var(--font-serif);
+  font-size: 15px; font-weight: 400;
+  color: var(--ink);
+}
+
+/* FORM GRID */
+.form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+@media (max-width: 720px) { .form-grid-2 { grid-template-columns: 1fr; } }
+
+/* FORM ELEMENTS */
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink2);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+
+input[type=text], input[type=email], input[type=number], input[type=date],
+input[type=password], select, textarea {
+  font-family: var(--font-body);
+  font-size: 14px; font-weight: 400;
+  color: var(--ink);
+  background: var(--bg2);
+  border: 1.5px solid var(--border2);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  outline: none;
+  transition: border-color var(--transition), box-shadow var(--transition);
+  width: 100%;
+  text-transform: none;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(184,58,10,0.1);
+  background: var(--surface);
+}
+
+input[readonly] { background: var(--surface2); color: var(--ink2); cursor: default; }
+textarea { resize: vertical; }
+
+.inline-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 500px) { .inline-grid { grid-template-columns: 1fr; } }
+
+/* RADIO */
+.radio-group { display: flex; gap: 20px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+.radio-group label { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; text-transform: none; letter-spacing: 0; margin-bottom: 0; cursor: pointer; }
+.radio-group input[type=radio] { width: auto; }
+
+/* CHECKBOX */
+.check-label {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  cursor: pointer;
+  margin-bottom: 14px;
+}
+.check-label input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+
+/* BUTTONS */
+.btn {
+  font-family: var(--font-body);
+  font-size: 13px; font-weight: 600;
+  padding: 9px 18px;
+  border-radius: var(--radius-sm);
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.btn-primary { background: var(--accent); color: white; }
+.btn-primary:hover { background: var(--accent2); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(184,58,10,0.3); }
+.btn-secondary { background: var(--surface2); color: var(--ink); border: 1px solid var(--border2); }
+.btn-secondary:hover { background: var(--border); }
+.btn-danger { background: var(--danger-soft); color: var(--danger); border: 1px solid #f5c6c6; }
+.btn-danger:hover { background: var(--danger); color: white; }
+.btn-sm { font-size: 12px; padding: 6px 12px; }
+.btn-icon { padding: 7px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; color: var(--ink2); transition: all .15s; }
+.btn-icon:hover { background: var(--border); color: var(--ink); }
+.btn-icon svg { width: 15px; height: 15px; display: block; }
+
+button[type=submit] {
+  font-family: var(--font-body);
+  font-size: 13px; font-weight: 600;
+  padding: 11px 22px;
+  border-radius: var(--radius-sm);
+  border: none;
+  cursor: pointer;
+  background: var(--accent);
+  color: white;
+  transition: all var(--transition);
+  margin-top: 4px;
+}
+
+button[type=submit]:hover {
+  background: var(--accent2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(184,58,10,0.3);
+}
+
+/* MESSAGES */
+.message {
+  font-size: 13px;
+  padding: 9px 13px;
+  border-radius: var(--radius-sm);
+  margin-top: 10px;
+  display: none;
+}
+.message.success { display: block; background: var(--success-soft); color: var(--success); border: 1px solid #b8dfc9; }
+.message.error   { display: block; background: var(--danger-soft);  color: var(--danger);  border: 1px solid #f5c6c6; }
+
+/* TABLE */
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  background: var(--surface2);
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--ink2);
+  padding: 10px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+tbody tr { border-bottom: 1px solid var(--border); transition: background .12s; }
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: var(--accent-soft); }
+td { padding: 11px 16px; font-size: 13px; color: var(--ink); vertical-align: middle; }
+.td-actions { display: flex; gap: 6px; }
+
+/* BADGES */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.badge-ajout        { background: var(--success-soft); color: var(--success); }
+.badge-utilisation  { background: var(--warn-soft);    color: var(--warn); }
+.badge-remboursement{ background: var(--danger-soft);  color: var(--danger); }
+.badge-admin        { background: #f0edfc; color: #5333bb; }
+.badge-manager      { background: #e6f1fb; color: #185fa5; }
+.badge-cashier      { background: var(--warn-soft); color: var(--warn); }
+.badge-viewer       { background: var(--surface2); color: var(--ink2); }
+
+/* STAT CARDS */
+.stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 28px; }
+@media (max-width: 800px) { .stats-grid { grid-template-columns: repeat(2,1fr); } }
+
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+}
+
+.stat-card.stat-added::before   { background: var(--success); }
+.stat-card.stat-used::before    { background: var(--warn); }
+.stat-card.stat-refunded::before{ background: var(--danger); }
+.stat-card.stat-balance::before { background: var(--accent); }
+
+.stat-card label {
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--ink3); margin-bottom: 8px;
+}
+
+.stat-card .stat-value {
+  font-family: var(--font-serif);
+  font-size: 22px; color: var(--ink); line-height: 1.1;
+}
+
+/* CHART */
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: var(--shadow);
+}
+
+.chart-card h3 {
+  font-family: var(--font-serif);
+  font-size: 16px; font-weight: 400;
+  margin-bottom: 20px;
+  color: var(--ink);
+}
+
+.chart-wrap { height: 180px; display: flex; align-items: flex-end; gap: 6px; }
+.chart-bar-group { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.chart-bars { display: flex; gap: 3px; align-items: flex-end; width: 100%; }
+.chart-bar { flex: 1; border-radius: 4px 4px 0 0; min-height: 2px; transition: height 0.5s ease; cursor: default; }
+.bar-ajout { background: var(--success); }
+.bar-utilisation { background: var(--warn); }
+.bar-remboursement { background: var(--danger); }
+.chart-label { font-size: 10px; color: var(--ink3); text-align: center; }
+
+.chart-legend { display: flex; gap: 16px; margin-top: 14px; flex-wrap: wrap; }
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink2); }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+/* TOOLBAR */
+.toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  background: var(--surface);
+}
+.toolbar label { margin-bottom: 0; flex: 1; min-width: 160px; }
+
+/* MODAL */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(24,20,15,0.55);
+  z-index: 500;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(3px);
+}
+.modal-overlay.open { display: flex; }
+
+.modal-box {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 28px;
+  width: 100%;
+  max-width: 440px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  animation: modalIn 0.2s ease;
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.94) translateY(-8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal-box h3 {
+  font-family: var(--font-serif);
+  font-size: 19px; font-weight: 400;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-close {
+  background: none; border: none; cursor: pointer;
+  font-size: 20px; color: var(--ink3); padding: 0; line-height: 1;
+}
+.modal-close:hover { color: var(--ink); }
+.modal-actions { display: flex; gap: 10px; margin-top: 16px; }
+
+/* EMPTY STATE */
+.empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--ink3);
+}
+.empty-state p { font-size: 14px; }
+
+/* SOLDE */
+.solde-pos  { color: var(--success); font-weight: 600; }
+.solde-neg  { color: var(--danger);  font-weight: 600; }
+.solde-zero { color: var(--ink3); }
+
+/* FILE INPUT */
+.file-input-wrap { display: flex; flex-direction: column; gap: 6px; }
+.file-input-wrap input[type=file] { font-size: 12px; padding: 6px; }
+.file-name { font-size: 12px; color: var(--ink3); margin-top: 4px; }
+
+/* LOGO PREVIEW */
+.logo-preview-wrap { display: flex; align-items: center; gap: 12px; margin-top: 6px; }
+.logo-preview-box {
+  width: 48px; height: 48px; border-radius: 10px;
+  background: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-serif); font-size: 20px; color: white;
+  overflow: hidden; flex-shrink: 0;
+}
+.logo-preview-box img { width: 100%; height: 100%; object-fit: cover; }
+
+/* ACCESS DENIED */
+.access-denied {
+  text-align: center;
+  padding: 64px 24px;
+  color: var(--ink3);
+}
+.access-denied h3 { font-family: var(--font-serif); font-size: 22px; font-weight: 400; color: var(--ink2); margin-bottom: 10px; }
+.access-denied p { font-size: 14px; }
+
+/* SESSION INFO */
+.session-info {
+  background: var(--accent-soft);
+  border: 1px solid #f0cdb8;
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  font-size: 12px;
+  color: var(--accent);
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* PRINT */
+@media print {
+  #auth-screen, header, nav, .no-print { display: none !important; }
+  .tab { display: block !important; }
+  .tab:not(.active) { display: none !important; }
+  body { background: white; }
+}
+
+/* LOADING SPINNER */
+.spinner {
+  display: inline-block;
+  width: 16px; height: 16px;
+  border: 2.5px solid rgba(255,255,255,0.4);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* LARAGON INDICATOR */
+.laragon-badge {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  background: var(--ink);
+  color: rgba(255,255,255,0.6);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 5px 10px;
+  border-radius: 99px;
+  letter-spacing: 0.05em;
+  z-index: 9999;
+  pointer-events: none;
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════
+     AUTH SCREEN
+══════════════════════════════════════════════ -->
+<div id="auth-screen">
+
+  <!-- Left brand panel -->
+  <div class="auth-left">
+    <div class="auth-brand">
+      <div class="auth-brand-logo">
+        <span id="auth-logo-text">L</span>
+        <img id="auth-logo-img" style="display:none" alt="logo" />
+      </div>
+      <h1 id="auth-brand-name">lexpert</h1>
+      <p>Gestion des Crédits Clients</p>
+    </div>
+
+    <div class="auth-features">
+      <div class="auth-feature">
+        <div class="auth-feature-icon">💳</div>
+        <span>Suivi complet des crédits clients en temps réel</span>
+      </div>
+      <div class="auth-feature">
+        <div class="auth-feature-icon">📊</div>
+        <span>Tableau de bord analytique avec graphiques</span>
+      </div>
+      <div class="auth-feature">
+        <div class="auth-feature-icon">👥</div>
+        <span>Gestion multi-utilisateurs avec rôles et permissions</span>
+      </div>
+      <div class="auth-feature">
+        <div class="auth-feature-icon">🔒</div>
+        <span>Sécurisé avec authentification et journaux d'activité</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right form panel -->
+  <div class="auth-right">
+    <div class="auth-form-wrap">
+      <div class="auth-form-title">Bienvenue</div>
+      <div class="auth-form-sub">Connectez-vous pour accéder à votre espace</div>
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" onclick="switchAuthTab('login')">Connexion</button>
+        <button class="auth-tab" onclick="switchAuthTab('register')" id="tab-register">Créer un compte</button>
+      </div>
+
+      <!-- LOGIN -->
+      <div class="auth-pane active" id="pane-login">
+        <div class="auth-error-box" id="login-error"></div>
+        <div class="field">
+          <label class="field-label">Adresse email</label>
+          <input type="email" id="login-email" placeholder="votre@email.com" autocomplete="email" />
+          <div class="field-error">Email invalide.</div>
+        </div>
+        <div class="field">
+          <label class="field-label">Mot de passe</label>
+          <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" />
+          <div class="field-error">Mot de passe requis.</div>
+        </div>
+        <button class="auth-submit" id="login-btn" onclick="doLogin()">Se connecter</button>
+
+        <div class="auth-demo-hint">
+          <strong>Comptes de démonstration (Laragon)</strong>
+          <div class="auth-hint-row">
+            <button class="auth-hint-chip" onclick="fillDemo('admin@lexpert.ma','admin123')">Admin</button>
+            <button class="auth-hint-chip" onclick="fillDemo('manager@lexpert.ma','manager123')">Manager</button>
+            <button class="auth-hint-chip" onclick="fillDemo('caissier@lexpert.ma','caissier123')">Caissier</button>
+            <button class="auth-hint-chip" onclick="fillDemo('viewer@lexpert.ma','viewer123')">Lecteur</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- REGISTER -->
+      <div class="auth-pane" id="pane-register">
+        <div class="auth-error-box" id="register-error"></div>
+        <div class="inline-grid">
+          <div class="field">
+            <label class="field-label">Prénom</label>
+            <input type="text" id="reg-firstname" placeholder="Prénom" />
+          </div>
+          <div class="field">
+            <label class="field-label">Nom</label>
+            <input type="text" id="reg-lastname" placeholder="Nom" />
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">Email</label>
+          <input type="email" id="reg-email" placeholder="votre@email.com" />
+        </div>
+        <div class="field">
+          <label class="field-label">Mot de passe</label>
+          <input type="password" id="reg-password" placeholder="8 caractères minimum" />
+        </div>
+        <div class="field">
+          <label class="field-label">Confirmer le mot de passe</label>
+          <input type="password" id="reg-confirm" placeholder="Répétez le mot de passe" />
+        </div>
+        <button class="auth-submit" id="register-btn" onclick="doRegister()">Créer mon compte</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MAIN APP
+══════════════════════════════════════════════ -->
+<div id="app">
+
+<header>
+  <div class="header-brand">
+    <div class="header-logo" id="header-logo">
+      <span id="header-logo-text">L</span>
+      <img id="header-logo-img" style="display:none" alt="Logo" />
+    </div>
+    <div class="header-title">
+      <h1 id="header-company-name">lexpert</h1>
+      <p>Gestion des Crédits Clients</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="header-info" id="header-info"></div>
+    <div class="header-user" onclick="toggleUserMenu()">
+      <div class="header-avatar" id="header-avatar">?</div>
+      <div class="header-user-name" id="header-user-name">Utilisateur</div>
+      <div class="user-dropdown" id="user-dropdown">
+        <div class="dropdown-item" onclick="goToSettings()">⚙ Paramètres</div>
+        <div class="dropdown-divider"></div>
+        <div class="dropdown-item danger" onclick="doLogout()">⬡ Déconnexion</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<nav id="main-nav">
+  <button data-tab="dashboard">
+    <span class="nav-icon">⊞</span> Tableau de bord
+  </button>
+  <button data-tab="payments">
+    <span class="nav-icon">💳</span> Paiements
+  </button>
+  <button data-tab="sales">
+    <span class="nav-icon">🛒</span> Ventes
+  </button>
+  <button data-tab="analysis">
+    <span class="nav-icon">📊</span> Analyse
+  </button>
+  <button data-tab="clients">
+    <span class="nav-icon">👥</span> Clients
+  </button>
+  <button data-tab="users" id="nav-users" style="display:none">
+    <span class="nav-icon">🔑</span> Utilisateurs
+  </button>
+  <button data-tab="settings">
+    <span class="nav-icon">⚙</span> Paramètres
+  </button>
+</nav>
+
+<main>
+
+  <!-- ── DASHBOARD ── -->
+  <section id="dashboard" class="tab active">
+    <h2>Tableau de bord</h2>
+    <div class="session-info" id="session-info">
+      🔒 <span id="session-detail"></span>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-card stat-added"><label>Total accordé</label><div class="stat-value" id="db-stat-added">0,00 MAD</div></div>
+      <div class="stat-card stat-used"><label>Total utilisé</label><div class="stat-value" id="db-stat-used">0,00 MAD</div></div>
+      <div class="stat-card stat-refunded"><label>Total remboursé</label><div class="stat-value" id="db-stat-refunded">0,00 MAD</div></div>
+      <div class="stat-card stat-balance"><label>Solde global</label><div class="stat-value" id="db-stat-balance">0,00 MAD</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+      <div class="chart-card">
+        <h3>Opérations — 6 derniers mois</h3>
+        <div class="chart-wrap" id="db-chart"></div>
+        <div class="chart-legend">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--success)"></div>Ajouts</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--warn)"></div>Utilisations</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--danger)"></div>Remboursements</div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Dernières opérations</h3>
+        <table>
+          <thead><tr><th>Client</th><th>Type</th><th>Montant</th><th>Date</th></tr></thead>
+          <tbody id="db-recent"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── PAYMENTS ── -->
+  <section id="payments" class="tab">
+    <h2>Crédits clients</h2>
+    <div id="payments-restricted" class="access-denied" style="display:none">
+      <h3>Accès restreint</h3>
+      <p>Votre rôle ne vous permet pas d'effectuer des paiements.</p>
+    </div>
+    <div id="payments-content" class="form-grid-2">
+      <div class="card">
+        <h3>➕ Ajouter un crédit</h3>
+        <form id="credit-add-form">
+          <label>Client <select id="add-client"></select></label>
+          <label>Nom du client <input type="text" id="add-client-name" readonly /></label>
+          <label>Mode de paiement
+            <select id="add-payment-method">
+              <option value="">Choisir un mode</option>
+              <option value="Espèces">Espèces</option>
+              <option value="Carte">Carte</option>
+              <option value="Virement">Virement</option>
+              <option value="Chèque">Chèque</option>
+            </select>
+          </label>
+          <label>Montant (MAD) <input type="number" id="add-amount" step="0.01" min="0.01" placeholder="0.00" /></label>
+          <label>Date <input type="date" id="add-date" /></label>
+          <label>Note <textarea id="add-note" rows="2" placeholder="Optionnel…"></textarea></label>
+          <button type="submit">Ajouter le crédit</button>
+          <div id="add-message" class="message"></div>
+        </form>
+      </div>
+      <div class="card">
+        <h3>↩ Rembourser un crédit</h3>
+        <form id="refund-form">
+          <label>Client <select id="refund-client"></select></label>
+          <label>Nom du client <input type="text" id="refund-client-name" readonly /></label>
+          <label>Solde actuel <input type="text" id="refund-balance" readonly /></label>
+          <label>Mode de remboursement
+            <select id="refund-payment-method">
+              <option value="">Choisir un mode</option>
+              <option value="Espèces">Espèces</option>
+              <option value="Carte">Carte</option>
+              <option value="Virement">Virement</option>
+              <option value="Chèque">Chèque</option>
+            </select>
+          </label>
+          <label>Montant (MAD) <input type="number" id="refund-amount" step="0.01" min="0.01" placeholder="0.00" /></label>
+          <label>Date <input type="date" id="refund-date" /></label>
+          <label>Note <textarea id="refund-note" rows="2" placeholder="Optionnel…"></textarea></label>
+          <button type="submit">Rembourser</button>
+          <div id="refund-message" class="message"></div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SALES ── -->
+  <section id="sales" class="tab">
+    <h2>Ventes</h2>
+    <div class="card" style="max-width:480px">
+      <h3>🛒 Utiliser un crédit lors d'une vente</h3>
+      <form id="usage-form">
+        <label>Client <select id="usage-client"></select></label>
+        <label>Nom du client <input type="text" id="usage-client-name" readonly /></label>
+        <label>Solde disponible <input type="text" id="usage-balance" readonly /></label>
+        <label>Montant utilisé (MAD) <input type="number" id="usage-amount" step="0.01" min="0.01" placeholder="0.00" /></label>
+        <label>Note <textarea id="usage-note" rows="2">Utilisation dans une vente</textarea></label>
+        <button type="submit">Utiliser le crédit</button>
+        <div id="usage-message" class="message"></div>
+      </form>
+    </div>
+    <div class="table-card">
+      <div class="table-card-header"><h3>Solde actuel par client</h3></div>
+      <table>
+        <thead><tr><th>N°</th><th>Client</th><th>Solde</th></tr></thead>
+        <tbody id="sales-balances"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── ANALYSIS ── -->
+  <section id="analysis" class="tab">
+    <h2>Analyse</h2>
+    <div class="stats-grid">
+      <div class="stat-card stat-added"><label>Total accordé</label><div class="stat-value" id="stat-added">0,00 MAD</div></div>
+      <div class="stat-card stat-used"><label>Total utilisé</label><div class="stat-value" id="stat-used">0,00 MAD</div></div>
+      <div class="stat-card stat-refunded"><label>Total remboursé</label><div class="stat-value" id="stat-refunded">0,00 MAD</div></div>
+      <div class="stat-card stat-balance"><label>Solde global</label><div class="stat-value" id="stat-balance">0,00 MAD</div></div>
+    </div>
+    <div class="chart-card">
+      <h3>Historique des opérations (6 derniers mois)</h3>
+      <div class="chart-wrap" id="chart-wrap"></div>
+      <div class="chart-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--success)"></div>Ajouts</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--warn)"></div>Utilisations</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--danger)"></div>Remboursements</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── CLIENTS ── -->
+  <section id="clients" class="tab">
+    <h2>Clients</h2>
+    <div class="card" style="max-width:520px">
+      <h3>➕ Ajouter un client</h3>
+      <form id="client-form">
+        <label>Nom complet <input type="text" id="client-name" placeholder="Nom du client" /></label>
+        <div class="inline-grid">
+          <label>Email <input type="email" id="client-email" placeholder="email@exemple.com" /></label>
+          <label>Téléphone <input type="text" id="client-telephone" placeholder="06XXXXXXXX" /></label>
+        </div>
+        <button type="submit">Ajouter le client</button>
+        <div id="client-message" class="message"></div>
+      </form>
+    </div>
+    <div class="table-card">
+      <div class="table-card-header"><h3>Liste des clients</h3></div>
+      <table>
+        <thead><tr><th>N°</th><th>Nom</th><th>Email</th><th>Téléphone</th><th>Solde</th><th>Actions</th></tr></thead>
+        <tbody id="client-list"></tbody>
+      </table>
+    </div>
+    <div class="table-card">
+      <div class="table-card-header">
+        <h3>Historique détaillé</h3>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm no-print" onclick="printHistory()">🖨 Imprimer</button>
+          <button class="btn btn-secondary btn-sm no-print" onclick="exportCSV()">⬇ CSV</button>
+        </div>
+      </div>
+      <div class="toolbar">
+        <label>Client <select id="history-client-filter"><option value="">Tous les clients</option></select></label>
+        <label>Recherche <input type="text" id="history-search" placeholder="Nom, note, type…" /></label>
+      </div>
+      <table>
+        <thead><tr><th>Date</th><th>N°</th><th>Client</th><th>Type</th><th>Mode</th><th>Montant</th><th>Note</th><th>Par</th><th>Actions</th></tr></thead>
+        <tbody id="credit-history"></tbody>
+      </table>
+      <div id="history-empty"></div>
+    </div>
+  </section>
+
+  <!-- ── USERS ── -->
+  <section id="users" class="tab">
+    <h2>Gestion des utilisateurs</h2>
+    <div id="users-restricted" class="access-denied" style="display:none">
+      <h3>Accès administrateur requis</h3>
+      <p>Seul un administrateur peut gérer les utilisateurs.</p>
+    </div>
+    <div id="users-content">
+      <div class="card" style="max-width:520px;margin-bottom:24px">
+        <h3>➕ Ajouter un utilisateur</h3>
+        <form id="user-add-form">
+          <div class="inline-grid">
+            <label>Prénom <input type="text" id="new-user-firstname" placeholder="Prénom" /></label>
+            <label>Nom <input type="text" id="new-user-lastname" placeholder="Nom" /></label>
+          </div>
+          <label>Email <input type="email" id="new-user-email" placeholder="email@exemple.com" /></label>
+          <label>Mot de passe <input type="password" id="new-user-password" placeholder="8 caractères minimum" /></label>
+          <label>Rôle
+            <select id="new-user-role">
+              <option value="admin">Administrateur</option>
+              <option value="manager">Gestionnaire</option>
+              <option value="cashier" selected>Caissier</option>
+              <option value="viewer">Lecteur</option>
+            </select>
+          </label>
+          <button type="submit">Créer l'utilisateur</button>
+          <div id="user-add-message" class="message"></div>
+        </form>
+      </div>
+      <div class="table-card">
+        <div class="table-card-header"><h3>Utilisateurs enregistrés</h3></div>
+        <table>
+          <thead><tr><th>Nom</th><th>Email</th><th>Rôle</th><th>Statut</th><th>Dernière connexion</th><th>Actions</th></tr></thead>
+          <tbody id="users-list"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SETTINGS ── -->
+  <section id="settings" class="tab">
+    <h2>Paramètres</h2>
+    <div class="card" style="max-width:520px">
+      <h3>Informations de l'entreprise</h3>
+      <form id="settings-form">
+        <label class="check-label">
+          <input type="checkbox" id="credits-enabled" />
+          Activer la gestion des crédits
+        </label>
+        <label>Nom de l'entreprise <input type="text" id="company-name" placeholder="Ex: lexpert" /></label>
+        <label>Logo (image)
+          <div class="file-input-wrap">
+            <input type="file" id="logo-image" accept="image/*" />
+            <span class="file-name" id="logo-file-name">Aucun logo sélectionné.</span>
+          </div>
+          <div class="logo-preview-wrap">
+            <div class="logo-preview-box" id="logo-preview-box">
+              <span id="logo-preview-text">L</span>
+              <img id="logo-preview-img" style="display:none" alt="Aperçu" />
+            </div>
+            <span style="font-size:12px;color:var(--ink3)">Aperçu du logo</span>
+          </div>
+        </label>
+        <label>Adresse <input type="text" id="company-address" placeholder="Ex: Mhamid 3 N 344, Marrakech" /></label>
+        <div class="inline-grid">
+          <label>Téléphone 1 <input type="text" id="company-phone-1" /></label>
+          <label>Téléphone 2 <input type="text" id="company-phone-2" /></label>
+        </div>
+        <div class="radio-group">
+          <span style="font-size:11px;font-weight:600;color:var(--ink2);text-transform:uppercase;letter-spacing:.05em">Mode :</span>
+          <label><input type="radio" name="tracking_mode" value="global" /> Global</label>
+          <label><input type="radio" name="tracking_mode" value="detail" /> Détaillé</label>
+        </div>
+        <button type="submit">Enregistrer les paramètres</button>
+        <div id="settings-message" class="message"></div>
+      </form>
+    </div>
+  </section>
+
+</main>
+</div>
+
+<!-- MODALS -->
+<div class="modal-overlay" id="modal-edit-client">
+  <div class="modal-box">
+    <h3>Modifier le client <button class="modal-close" data-close="modal-edit-client">×</button></h3>
+    <form id="edit-client-form">
+      <input type="hidden" id="edit-client-id" />
+      <label>Nom complet <input type="text" id="edit-client-name" required /></label>
+      <label>Email <input type="email" id="edit-client-email" /></label>
+      <label>Téléphone <input type="text" id="edit-client-telephone" /></label>
+      <div class="modal-actions">
+        <button type="submit" class="btn btn-primary">Modifier</button>
+        <button type="button" class="btn btn-secondary" data-close="modal-edit-client">Annuler</button>
+      </div>
+      <div id="edit-client-message" class="message"></div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-edit-history">
+  <div class="modal-box">
+    <h3>Modifier l'opération <button class="modal-close" data-close="modal-edit-history">×</button></h3>
+    <form id="edit-history-form">
+      <input type="hidden" id="edit-history-id" />
+      <label>Client <select id="edit-history-client"></select></label>
+      <label>Type
+        <select id="edit-history-type">
+          <option value="ajout">Ajout</option>
+          <option value="utilisation">Utilisation</option>
+          <option value="remboursement">Remboursement</option>
+        </select>
+      </label>
+      <label>Mode
+        <select id="edit-history-payment-method">
+          <option value="">Choisir un mode</option>
+          <option value="Espèces">Espèces</option>
+          <option value="Carte">Carte</option>
+          <option value="Virement">Virement</option>
+          <option value="Chèque">Chèque</option>
+        </select>
+      </label>
+      <label>Montant (MAD) <input type="number" id="edit-history-amount" step="0.01" min="0.01" /></label>
+      <label>Note <textarea id="edit-history-note" rows="3"></textarea></label>
+      <div class="modal-actions">
+        <button type="submit" class="btn btn-primary">Enregistrer</button>
+        <button type="button" class="btn btn-secondary" data-close="modal-edit-history">Annuler</button>
+      </div>
+      <div id="edit-history-message" class="message"></div>
+    </form>
+  </div>
+</div>
+
+<!-- Laragon badge -->
+<div class="laragon-badge" id="laragon-badge" style="display:none">⚡ Laragon • localhost</div>
+
+<script>
+'use strict';
+
+// ══════════════════════════════════════════════════════════════
+//  CONFIG — adapté pour Laragon (localhost)
+//  Pour Hostinger : changer API_BASE et LARAGON_MODE à false
+// ══════════════════════════════════════════════════════════════
+const CONFIG = {
+  LARAGON_MODE: true,               // true = standalone HTML, false = backend Node.js/PHP
+  API_BASE:     'http://localhost:3000/api',  // Laragon Node.js
+  SESSION_KEY:  'lx_session',
+  DATA_KEY:     'lx_data',
+  VERSION:      '2.0.0',
+};
+
+// ══════════════════════════════════════════════════════════════
+//  UTILISATEURS PAR DÉFAUT (Laragon standalone)
+//  En production Hostinger, ces comptes viennent de la BDD MySQL
+// ══════════════════════════════════════════════════════════════
+const DEFAULT_USERS = [
+  { id:1, email:'admin@lexpert.ma',    password:'admin123',    role:'admin',   firstName:'Admin',   lastName:'Système',  active:true },
+  { id:2, email:'manager@lexpert.ma',  password:'manager123',  role:'manager', firstName:'Sarah',   lastName:'Benali',   active:true },
+  { id:3, email:'caissier@lexpert.ma', password:'caissier123', role:'cashier', firstName:'Karim',   lastName:'Alaoui',   active:true },
+  { id:4, email:'viewer@lexpert.ma',   password:'viewer123',   role:'viewer',  firstName:'Leila',   lastName:'Mansour',  active:true },
+];
+
+// Permissions par rôle
+const ROLE_PERMISSIONS = {
+  admin:   ['all'],
+  manager: ['clients.read','clients.create','clients.update','credits.read','credits.create','credits.update','sales.read','sales.create','reports.read'],
+  cashier: ['clients.read','credits.read','credits.create','sales.read','sales.create'],
+  viewer:  ['clients.read','credits.read','sales.read','reports.read'],
+};
+
+const ROLE_LABELS = { admin:'Administrateur', manager:'Gestionnaire', cashier:'Caissier', viewer:'Lecteur' };
+
+// ══════════════════════════════════════════════════════════════
+//  DATA LAYER
+// ══════════════════════════════════════════════════════════════
+const DB = {
+  get(key, def) {
+    try { const v = localStorage.getItem('lx_' + key); return v ? JSON.parse(v) : def; }
+    catch { return def; }
+  },
+  set(key, val) { try { localStorage.setItem('lx_' + key, JSON.stringify(val)); } catch(e){} },
+  remove(key)   { localStorage.removeItem('lx_' + key); }
+};
+
+let appData = DB.get('appdata', {
+  clients:       [],
+  history:       [],
+  users:         DEFAULT_USERS,
+  settings:      { creditsEnabled:true, companyName:'lexpert', address:'', phone1:'', phone2:'', trackingMode:'detail', logoData:null },
+  nextClientId:  1,
+  nextHistoryId: 1,
+  nextUserId:    5,
+});
+
+// Ensure default users always present
+if (!appData.users?.length) appData.users = DEFAULT_USERS;
+
+function save() { DB.set('appdata', appData); }
+
+// Destructure for convenience
+let { clients, history: txHistory, users, settings } = appData;
+
+// Sync references so mutations reflect in appData
+function syncRefs() {
+  clients   = appData.clients;
+  txHistory = appData.history;
+  users     = appData.users;
+  settings  = appData.settings;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  SESSION
+// ══════════════════════════════════════════════════════════════
+let currentUser = null;
+
+function getSession() {
+  const s = DB.get('session', null);
+  if (!s) return null;
+  if (s.expiresAt && Date.now() > s.expiresAt) { DB.remove('session'); return null; }
+  return s;
+}
+
+function createSession(user) {
+  const session = {
+    userId:    user.id,
+    email:     user.email,
+    role:      user.role,
+    firstName: user.firstName,
+    lastName:  user.lastName,
+    loginAt:   Date.now(),
+    expiresAt: Date.now() + 8 * 60 * 60 * 1000, // 8h
+  };
+  DB.set('session', session);
+  return session;
+}
+
+function destroySession() {
+  DB.remove('session');
+  currentUser = null;
+}
+
+function can(permission) {
+  if (!currentUser) return false;
+  const perms = ROLE_PERMISSIONS[currentUser.role] || [];
+  return perms.includes('all') || perms.includes(permission);
+}
+
+// ══════════════════════════════════════════════════════════════
+//  AUTH UI
+// ══════════════════════════════════════════════════════════════
+function switchAuthTab(tab) {
+  document.querySelectorAll('.auth-tab').forEach((t,i) => t.classList.toggle('active', (i===0 && tab==='login') || (i===1 && tab==='register')));
+  document.getElementById('pane-login').classList.toggle('active', tab === 'login');
+  document.getElementById('pane-register').classList.toggle('active', tab === 'register');
+}
+
+function fillDemo(email, password) {
+  document.getElementById('login-email').value = email;
+  document.getElementById('login-password').value = password;
+}
+
+function showAuthError(panelId, msg) {
+  const el = document.getElementById(panelId);
+  el.textContent = msg;
+  el.classList.add('visible');
+  setTimeout(() => el.classList.remove('visible'), 4000);
+}
+
+function doLogin() {
+  const email    = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+
+  if (!email || !password) {
+    return showAuthError('login-error', 'Veuillez remplir tous les champs.');
+  }
+
+  const btn = document.getElementById('login-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Connexion…';
+
+  // Simulate async (for Laragon mode — replace with fetch() for real backend)
+  setTimeout(() => {
+    syncRefs();
+    const user = appData.users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password && u.active !== false);
+
+    if (!user) {
+      btn.disabled = false;
+      btn.textContent = 'Se connecter';
+      return showAuthError('login-error', 'Email ou mot de passe incorrect.');
+    }
+
+    // Update last login
+    user.lastLogin = new Date().toLocaleString('fr-FR');
+    save();
+
+    currentUser = user;
+    createSession(user);
+    launchApp();
+
+    btn.disabled = false;
+    btn.textContent = 'Se connecter';
+  }, 600);
+}
+
+function doRegister() {
+  const firstName = document.getElementById('reg-firstname').value.trim();
+  const lastName  = document.getElementById('reg-lastname').value.trim();
+  const email     = document.getElementById('reg-email').value.trim();
+  const password  = document.getElementById('reg-password').value;
+  const confirm   = document.getElementById('reg-confirm').value;
+
+  if (!firstName || !email || !password) return showAuthError('register-error', 'Veuillez remplir tous les champs obligatoires.');
+  if (password.length < 8)  return showAuthError('register-error', 'Le mot de passe doit contenir au moins 8 caractères.');
+  if (password !== confirm)  return showAuthError('register-error', 'Les mots de passe ne correspondent pas.');
+
+  syncRefs();
+  const exists = appData.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+  if (exists) return showAuthError('register-error', 'Cet email est déjà utilisé.');
+
+  const newUser = {
+    id: appData.nextUserId++,
+    email, password, firstName, lastName,
+    role: 'viewer', // nouveaux comptes = lecteur par défaut
+    active: true,
+    createdAt: new Date().toISOString(),
+  };
+
+  appData.users.push(newUser);
+  save();
+
+  showAuthError('register-error', ''); // clear
+  currentUser = newUser;
+  createSession(newUser);
+  launchApp();
+}
+
+function doLogout() {
+  destroySession();
+  currentUser = null;
+  document.getElementById('app').classList.remove('visible');
+  const authScreen = document.getElementById('auth-screen');
+  authScreen.classList.remove('hiding');
+  authScreen.style.display = 'flex';
+  // Reset login form
+  document.getElementById('login-email').value = '';
+  document.getElementById('login-password').value = '';
+  switchAuthTab('login');
+}
+
+// Enter key support
+document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+document.getElementById('login-email').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+// ══════════════════════════════════════════════════════════════
+//  LAUNCH APP
+// ══════════════════════════════════════════════════════════════
+function launchApp() {
+  syncRefs();
+
+  // Hide auth, show app
+  const authScreen = document.getElementById('auth-screen');
+  authScreen.classList.add('hiding');
+  setTimeout(() => { authScreen.style.display = 'none'; }, 400);
+  document.getElementById('app').classList.add('visible');
+
+  // Setup header user info
+  document.getElementById('header-avatar').textContent = (currentUser.firstName || '?').charAt(0).toUpperCase();
+  document.getElementById('header-user-name').textContent = currentUser.firstName + ' ' + (currentUser.lastName || '');
+
+  // Show/hide nav based on role
+  document.getElementById('nav-users').style.display = can('all') ? '' : 'none';
+
+  // Session info
+  document.getElementById('session-detail').textContent =
+    `Connecté en tant que ${currentUser.firstName} ${currentUser.lastName || ''} — Rôle : ${ROLE_LABELS[currentUser.role]}`;
+
+  // Laragon badge
+  if (CONFIG.LARAGON_MODE) {
+    document.getElementById('laragon-badge').style.display = 'block';
+  }
+
+  // Load everything
+  loadSettings();
+  populateClientSelects();
+  refreshPaymentsSelects();
+  renderDashboard();
+  renderSalesBalances();
+  renderClientList();
+  renderHistory();
+  renderAnalysis();
+  renderUsersList();
+  applyRoleRestrictions();
+
+  // Default to dashboard
+  switchTab('dashboard');
+}
+
+function applyRoleRestrictions() {
+  // Payments
+  const canPay = can('credits.create');
+  document.getElementById('payments-restricted').style.display = canPay ? 'none' : 'block';
+  document.getElementById('payments-content').style.display    = canPay ? '' : 'none';
+
+  // Users
+  const canAdmin = can('all');
+  document.getElementById('users-restricted').style.display = canAdmin ? 'none' : 'block';
+  document.getElementById('users-content').style.display    = canAdmin ? '' : 'none';
+}
+
+// ══════════════════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════════════════
+function fmt(n) {
+  return Number(n).toLocaleString('fr-MA', { minimumFractionDigits:2, maximumFractionDigits:2 }) + ' MAD';
+}
+function today() { return new Date().toISOString().slice(0, 10); }
+
+function clientBalance(id) {
+  return appData.history.filter(h => h.clientId == id).reduce((acc, h) => {
+    if (h.type === 'ajout')         return acc + h.amount;
+    if (h.type === 'utilisation')   return acc - h.amount;
+    if (h.type === 'remboursement') return acc - h.amount;
+    return acc;
+  }, 0);
+}
+
+function showMsg(id, txt, type) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = txt;
+  el.className = 'message ' + type;
+  setTimeout(() => { el.className = 'message'; el.textContent = ''; }, 3500);
+}
+
+function getUserName(userId) {
+  if (!userId) return '—';
+  const u = appData.users.find(u => u.id == userId);
+  return u ? u.firstName + ' ' + (u.lastName || '') : '—';
+}
+
+// ══════════════════════════════════════════════════════════════
+//  TABS
+// ══════════════════════════════════════════════════════════════
+function switchTab(tab) {
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.id === tab));
+  if (tab === 'dashboard') renderDashboard();
+  if (tab === 'payments')  { populateClientSelects(); refreshPaymentsSelects(); }
+  if (tab === 'sales')     { populateClientSelects(); renderSalesBalances(); }
+  if (tab === 'analysis')  renderAnalysis();
+  if (tab === 'clients')   { renderClientList(); renderHistory(); populateClientSelects(); }
+  if (tab === 'users')     renderUsersList();
+  if (tab === 'settings')  loadSettings();
+}
+
+document.querySelectorAll('nav button').forEach(btn => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+
+function goToSettings() {
+  toggleUserMenu();
+  switchTab('settings');
+}
+
+// ══════════════════════════════════════════════════════════════
+//  USER DROPDOWN
+// ══════════════════════════════════════════════════════════════
+function toggleUserMenu() {
+  document.getElementById('user-dropdown').classList.toggle('open');
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.header-user')) {
+    document.getElementById('user-dropdown')?.classList.remove('open');
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  DASHBOARD
+// ══════════════════════════════════════════════════════════════
+function renderDashboard() {
+  syncRefs();
+  const added    = txHistory.filter(h=>h.type==='ajout').reduce((a,h)=>a+h.amount,0);
+  const used     = txHistory.filter(h=>h.type==='utilisation').reduce((a,h)=>a+h.amount,0);
+  const refunded = txHistory.filter(h=>h.type==='remboursement').reduce((a,h)=>a+h.amount,0);
+  const balance  = added - used - refunded;
+  document.getElementById('db-stat-added').textContent    = fmt(added);
+  document.getElementById('db-stat-used').textContent     = fmt(used);
+  document.getElementById('db-stat-refunded').textContent = fmt(refunded);
+  document.getElementById('db-stat-balance').textContent  = fmt(balance);
+
+  // Recent
+  const recent = [...txHistory].reverse().slice(0, 6);
+  const tbody = document.getElementById('db-recent');
+  if (!recent.length) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--ink3);padding:20px">Aucune opération.</td></tr>'; }
+  else {
+    tbody.innerHTML = recent.map(h => {
+      const c = clients.find(cl => cl.id == h.clientId);
+      return `<tr>
+        <td>${c?.name || '—'}</td>
+        <td><span class="badge badge-${h.type}">${h.type}</span></td>
+        <td style="font-weight:600">${fmt(h.amount)}</td>
+        <td style="color:var(--ink3)">${h.date || '—'}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  renderChartInto('db-chart');
+}
+
+// ══════════════════════════════════════════════════════════════
+//  SETTINGS
+// ══════════════════════════════════════════════════════════════
+function loadSettings() {
+  syncRefs();
+  const s = appData.settings;
+  document.getElementById('credits-enabled').checked = s.creditsEnabled;
+  document.getElementById('company-name').value = s.companyName || '';
+  document.getElementById('company-address').value = s.address || '';
+  document.getElementById('company-phone-1').value = s.phone1 || '';
+  document.getElementById('company-phone-2').value = s.phone2 || '';
+  document.querySelectorAll('[name=tracking_mode]').forEach(r => r.checked = r.value === s.trackingMode);
+  applyHeaderInfo();
+  applyLogo();
+  applyAuthBrand();
+}
+
+function applyHeaderInfo() {
+  const s = appData.settings;
+  document.getElementById('header-company-name').textContent = s.companyName || 'lexpert';
+  document.getElementById('header-info').textContent = [s.address, s.phone1, s.phone2].filter(Boolean).join(' • ');
+  const letter = (s.companyName || 'L').charAt(0).toUpperCase();
+  document.getElementById('header-logo-text').textContent = letter;
+  document.getElementById('logo-preview-text').textContent = letter;
+}
+
+function applyLogo() {
+  const s = appData.settings;
+  const img1 = document.getElementById('header-logo-img');
+  const txt1 = document.getElementById('header-logo-text');
+  const img2 = document.getElementById('logo-preview-img');
+  const txt2 = document.getElementById('logo-preview-text');
+  if (s.logoData) {
+    img1.src = s.logoData; img1.style.display = 'block'; txt1.style.display = 'none';
+    img2.src = s.logoData; img2.style.display = 'block'; txt2.style.display = 'none';
+  } else {
+    img1.style.display = 'none'; txt1.style.display = '';
+    img2.style.display = 'none'; txt2.style.display = '';
+  }
+}
+
+function applyAuthBrand() {
+  const s = appData.settings;
+  const letter = (s.companyName || 'L').charAt(0).toUpperCase();
+  document.getElementById('auth-logo-text').textContent = letter;
+  document.getElementById('auth-brand-name').textContent = s.companyName || 'lexpert';
+  const img = document.getElementById('auth-logo-img');
+  const txt = document.getElementById('auth-logo-text');
+  if (s.logoData) { img.src = s.logoData; img.style.display = 'block'; txt.style.display = 'none'; }
+  else { img.style.display = 'none'; txt.style.display = ''; }
+}
+
+document.getElementById('logo-image').addEventListener('change', function() {
+  const file = this.files[0];
+  if (!file) return;
+  document.getElementById('logo-file-name').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = e => { appData.settings.logoData = e.target.result; applyLogo(); };
+  reader.readAsDataURL(file);
+});
+
+document.getElementById('company-name').addEventListener('input', function() {
+  const letter = (this.value || 'L').charAt(0).toUpperCase();
+  document.getElementById('logo-preview-text').textContent = letter;
+});
+
+document.getElementById('settings-form').addEventListener('submit', e => {
+  e.preventDefault();
+  syncRefs();
+  appData.settings.creditsEnabled  = document.getElementById('credits-enabled').checked;
+  appData.settings.companyName     = document.getElementById('company-name').value.trim();
+  appData.settings.address         = document.getElementById('company-address').value.trim();
+  appData.settings.phone1          = document.getElementById('company-phone-1').value.trim();
+  appData.settings.phone2          = document.getElementById('company-phone-2').value.trim();
+  appData.settings.trackingMode    = document.querySelector('[name=tracking_mode]:checked')?.value || 'detail';
+  save();
+  applyHeaderInfo();
+  showMsg('settings-message', 'Paramètres enregistrés avec succès.', 'success');
+});
+
+// ══════════════════════════════════════════════════════════════
+//  CLIENT SELECTS
+// ══════════════════════════════════════════════════════════════
+function populateClientSelects() {
+  syncRefs();
+  const selects = ['add-client','refund-client','usage-client','history-client-filter','edit-history-client'];
+  selects.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const prev = el.value;
+    const withAll = id === 'history-client-filter';
+    el.innerHTML = withAll ? '<option value="">Tous les clients</option>' : '<option value="">-- Choisir --</option>';
+    clients.forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.id;
+      o.textContent = '#' + String(c.id).padStart(3,'0') + ' — ' + c.name;
+      el.appendChild(o);
+    });
+    if (prev) el.value = prev;
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+//  PAYMENTS TAB
+// ══════════════════════════════════════════════════════════════
+function refreshPaymentsSelects() {
+  updateClientNameField('add-client', 'add-client-name');
+  updateClientNameField('refund-client', 'refund-client-name');
+  updateRefundBalance();
+  document.getElementById('add-date').value = today();
+  document.getElementById('refund-date').value = today();
+}
+
+function updateClientNameField(selectId, nameId) {
+  const sel = document.getElementById(selectId);
+  const c = clients.find(c => c.id == sel?.value);
+  document.getElementById(nameId).value = c ? c.name : '';
+}
+
+function updateRefundBalance() {
+  const sel = document.getElementById('refund-client');
+  const c = clients.find(c => c.id == sel?.value);
+  document.getElementById('refund-balance').value = c ? fmt(clientBalance(c.id)) : '';
+}
+
+document.getElementById('add-client')?.addEventListener('change', () => updateClientNameField('add-client', 'add-client-name'));
+document.getElementById('refund-client')?.addEventListener('change', () => { updateClientNameField('refund-client', 'refund-client-name'); updateRefundBalance(); });
+
+document.getElementById('credit-add-form').addEventListener('submit', e => {
+  e.preventDefault();
+  if (!can('credits.create')) return showMsg('add-message', 'Permission refusée.', 'error');
+  const cId = +document.getElementById('add-client').value;
+  if (!cId) return showMsg('add-message', 'Veuillez sélectionner un client.', 'error');
+  const amount = +document.getElementById('add-amount').value;
+  if (!amount || amount <= 0) return showMsg('add-message', 'Montant invalide.', 'error');
+  const method = document.getElementById('add-payment-method').value;
+  if (!method) return showMsg('add-message', 'Veuillez choisir un mode de paiement.', 'error');
+
+  appData.history.push({
+    id: appData.nextHistoryId++,
+    clientId: cId,
+    type: 'ajout',
+    method,
+    amount,
+    date: document.getElementById('add-date').value,
+    note: document.getElementById('add-note').value,
+    operatorId: currentUser?.id,
+  });
+  save();
+  showMsg('add-message', 'Crédit ajouté avec succès.', 'success');
+  document.getElementById('credit-add-form').reset();
+  document.getElementById('add-date').value = today();
+});
+
+document.getElementById('refund-form').addEventListener('submit', e => {
+  e.preventDefault();
+  if (!can('credits.create')) return showMsg('refund-message', 'Permission refusée.', 'error');
+  const cId = +document.getElementById('refund-client').value;
+  if (!cId) return showMsg('refund-message', 'Veuillez sélectionner un client.', 'error');
+  const amount = +document.getElementById('refund-amount').value;
+  if (!amount || amount <= 0) return showMsg('refund-message', 'Montant invalide.', 'error');
+  const bal = clientBalance(cId);
+  if (amount > bal) return showMsg('refund-message', `Solde insuffisant (${fmt(bal)}).`, 'error');
+  const method = document.getElementById('refund-payment-method').value;
+  if (!method) return showMsg('refund-message', 'Veuillez choisir un mode.', 'error');
+
+  appData.history.push({
+    id: appData.nextHistoryId++,
+    clientId: cId,
+    type: 'remboursement',
+    method,
+    amount,
+    date: document.getElementById('refund-date').value,
+    note: document.getElementById('refund-note').value,
+    operatorId: currentUser?.id,
+  });
+  save();
+  showMsg('refund-message', 'Remboursement enregistré.', 'success');
+  document.getElementById('refund-form').reset();
+  document.getElementById('refund-date').value = today();
+  updateRefundBalance();
+});
+
+// ══════════════════════════════════════════════════════════════
+//  SALES TAB
+// ══════════════════════════════════════════════════════════════
+document.getElementById('usage-client')?.addEventListener('change', () => {
+  const sel = document.getElementById('usage-client');
+  const c = clients.find(c => c.id == sel.value);
+  document.getElementById('usage-client-name').value = c ? c.name : '';
+  document.getElementById('usage-balance').value = c ? fmt(clientBalance(c.id)) : '';
+});
+
+document.getElementById('usage-form').addEventListener('submit', e => {
+  e.preventDefault();
+  if (!can('sales.create')) return showMsg('usage-message', 'Permission refusée.', 'error');
+  const cId = +document.getElementById('usage-client').value;
+  if (!cId) return showMsg('usage-message', 'Veuillez sélectionner un client.', 'error');
+  const amount = +document.getElementById('usage-amount').value;
+  if (!amount || amount <= 0) return showMsg('usage-message', 'Montant invalide.', 'error');
+  const bal = clientBalance(cId);
+  if (amount > bal) return showMsg('usage-message', `Solde insuffisant (${fmt(bal)}).`, 'error');
+
+  appData.history.push({
+    id: appData.nextHistoryId++,
+    clientId: cId,
+    type: 'utilisation',
+    method: '',
+    amount,
+    date: today(),
+    note: document.getElementById('usage-note').value,
+    operatorId: currentUser?.id,
+  });
+  save();
+  showMsg('usage-message', 'Crédit utilisé avec succès.', 'success');
+  document.getElementById('usage-form').reset();
+  document.getElementById('usage-note').value = 'Utilisation dans une vente';
+  renderSalesBalances();
+});
+
+function renderSalesBalances() {
+  syncRefs();
+  const tbody = document.getElementById('sales-balances');
+  if (!tbody) return;
+  if (!clients.length) { tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--ink3);padding:20px">Aucun client.</td></tr>'; return; }
+  tbody.innerHTML = clients.map(c => {
+    const bal = clientBalance(c.id);
+    const cls = bal > 0 ? 'solde-pos' : bal < 0 ? 'solde-neg' : 'solde-zero';
+    return `<tr><td>#${String(c.id).padStart(3,'0')}</td><td>${c.name}</td><td class="${cls}">${fmt(bal)}</td></tr>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+//  ANALYSIS
+// ══════════════════════════════════════════════════════════════
+function renderAnalysis() {
+  syncRefs();
+  const added    = txHistory.filter(h=>h.type==='ajout').reduce((a,h)=>a+h.amount,0);
+  const used     = txHistory.filter(h=>h.type==='utilisation').reduce((a,h)=>a+h.amount,0);
+  const refunded = txHistory.filter(h=>h.type==='remboursement').reduce((a,h)=>a+h.amount,0);
+  const balance  = added - used - refunded;
+  document.getElementById('stat-added').textContent    = fmt(added);
+  document.getElementById('stat-used').textContent     = fmt(used);
+  document.getElementById('stat-refunded').textContent = fmt(refunded);
+  document.getElementById('stat-balance').textContent  = fmt(balance);
+  renderChartInto('chart-wrap');
+}
+
+function renderChartInto(containerId) {
+  syncRefs();
+  const wrap = document.getElementById(containerId);
+  if (!wrap) return;
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(); d.setMonth(d.getMonth() - i);
+    months.push({ key: d.toISOString().slice(0,7), label: d.toLocaleString('fr-FR', {month:'short'}) });
+  }
+  const data = months.map(m => {
+    const mh = txHistory.filter(h => h.date?.startsWith(m.key));
+    return {
+      label: m.label,
+      ajout:         mh.filter(h=>h.type==='ajout').reduce((a,h)=>a+h.amount,0),
+      utilisation:   mh.filter(h=>h.type==='utilisation').reduce((a,h)=>a+h.amount,0),
+      remboursement: mh.filter(h=>h.type==='remboursement').reduce((a,h)=>a+h.amount,0),
+    };
+  });
+  const maxVal = Math.max(...data.flatMap(d=>[d.ajout, d.utilisation, d.remboursement]), 1);
+  const H = 140;
+  wrap.innerHTML = data.map(d => `
+    <div class="chart-bar-group">
+      <div class="chart-bars">
+        <div class="chart-bar bar-ajout" style="height:${Math.round(d.ajout/maxVal*H)}px" title="Ajout: ${fmt(d.ajout)}"></div>
+        <div class="chart-bar bar-utilisation" style="height:${Math.round(d.utilisation/maxVal*H)}px" title="Utilisation: ${fmt(d.utilisation)}"></div>
+        <div class="chart-bar bar-remboursement" style="height:${Math.round(d.remboursement/maxVal*H)}px" title="Remboursement: ${fmt(d.remboursement)}"></div>
+      </div>
+      <div class="chart-label">${d.label}</div>
+    </div>`).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+//  CLIENTS
+// ══════════════════════════════════════════════════════════════
+document.getElementById('client-form').addEventListener('submit', e => {
+  e.preventDefault();
+  if (!can('clients.create')) return showMsg('client-message', 'Permission refusée.', 'error');
+  const name = document.getElementById('client-name').value.trim();
+  if (!name) return showMsg('client-message', 'Le nom est obligatoire.', 'error');
+  appData.clients.push({
+    id: appData.nextClientId++,
+    name,
+    email: document.getElementById('client-email').value.trim(),
+    tel:   document.getElementById('client-telephone').value.trim(),
+    createdBy: currentUser?.id,
+    createdAt: new Date().toISOString(),
+  });
+  save();
+  showMsg('client-message', 'Client ajouté avec succès.', 'success');
+  document.getElementById('client-form').reset();
+  syncRefs();
+  renderClientList();
+  populateClientSelects();
+});
+
+function renderClientList() {
+  syncRefs();
+  const tbody = document.getElementById('client-list');
+  if (!tbody) return;
+  if (!clients.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--ink3);padding:32px">Aucun client enregistré.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = clients.map(c => {
+    const bal = clientBalance(c.id);
+    const cls = bal > 0 ? 'solde-pos' : bal < 0 ? 'solde-neg' : 'solde-zero';
+    const canEdit = can('clients.update');
+    const canDel  = can('clients.delete') || can('all');
+    return `<tr>
+      <td>#${String(c.id).padStart(3,'0')}</td>
+      <td>${c.name}</td>
+      <td>${c.email || '—'}</td>
+      <td>${c.tel || '—'}</td>
+      <td class="${cls}">${fmt(bal)}</td>
+      <td class="td-actions">
+        ${canEdit ? `<button class="btn-icon" onclick="openEditClient(${c.id})" title="Modifier"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>` : ''}
+        ${canDel  ? `<button class="btn-icon" onclick="deleteClient(${c.id})" title="Supprimer" style="color:var(--danger)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function openEditClient(id) {
+  syncRefs();
+  const c = clients.find(c => c.id == id);
+  if (!c) return;
+  document.getElementById('edit-client-id').value  = c.id;
+  document.getElementById('edit-client-name').value = c.name;
+  document.getElementById('edit-client-email').value = c.email || '';
+  document.getElementById('edit-client-telephone').value = c.tel || '';
+  openModal('modal-edit-client');
+}
+
+function deleteClient(id) {
+  if (!can('all') && !can('clients.delete')) return;
+  if (!confirm('Supprimer ce client ? Toutes les opérations associées seront perdues.')) return;
+  appData.clients  = appData.clients.filter(c => c.id != id);
+  appData.history  = appData.history.filter(h => h.clientId != id);
+  save(); syncRefs();
+  renderClientList();
+  populateClientSelects();
+  renderHistory();
+}
+
+document.getElementById('edit-client-form').addEventListener('submit', e => {
+  e.preventDefault();
+  const id = +document.getElementById('edit-client-id').value;
+  const c = appData.clients.find(c => c.id == id);
+  if (!c) return;
+  c.name  = document.getElementById('edit-client-name').value.trim();
+  c.email = document.getElementById('edit-client-email').value.trim();
+  c.tel   = document.getElementById('edit-client-telephone').value.trim();
+  save();
+  showMsg('edit-client-message', 'Client modifié.', 'success');
+  setTimeout(() => closeModal('modal-edit-client'), 900);
+  renderClientList();
+  populateClientSelects();
+});
+
+// ══════════════════════════════════════════════════════════════
+//  HISTORY
+// ══════════════════════════════════════════════════════════════
+function renderHistory() {
+  syncRefs();
+  const filterClient = document.getElementById('history-client-filter')?.value;
+  const search = (document.getElementById('history-search')?.value || '').toLowerCase();
+  let rows = [...txHistory].reverse();
+  if (filterClient) rows = rows.filter(h => h.clientId == filterClient);
+  if (search) rows = rows.filter(h => {
+    const c = clients.find(cl => cl.id == h.clientId);
+    return [c?.name, h.type, h.method, h.note, h.date].join(' ').toLowerCase().includes(search);
+  });
+
+  const tbody = document.getElementById('credit-history');
+  const empty = document.getElementById('history-empty');
+  if (!rows.length) {
+    tbody.innerHTML = '';
+    empty.innerHTML = '<div class="empty-state"><p>Aucune opération trouvée.</p></div>';
+    return;
+  }
+  empty.innerHTML = '';
+  const canEdit = can('credits.update') || can('all');
+  const canDel  = can('credits.delete') || can('all');
+  tbody.innerHTML = rows.map(h => {
+    const c = clients.find(cl => cl.id == h.clientId);
+    return `<tr>
+      <td>${h.date || '—'}</td>
+      <td>#${String(h.clientId).padStart(3,'0')}</td>
+      <td>${c?.name || '—'}</td>
+      <td><span class="badge badge-${h.type}">${h.type}</span></td>
+      <td>${h.method || '—'}</td>
+      <td style="font-weight:600">${fmt(h.amount)}</td>
+      <td style="color:var(--ink2);font-size:12px">${h.note || '—'}</td>
+      <td style="font-size:12px;color:var(--ink3)">${getUserName(h.operatorId)}</td>
+      <td class="td-actions">
+        ${canEdit ? `<button class="btn-icon" onclick="openEditHistory(${h.id})" title="Modifier"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>` : ''}
+        ${canDel  ? `<button class="btn-icon" onclick="deleteHistory(${h.id})" title="Supprimer" style="color:var(--danger)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+document.getElementById('history-client-filter')?.addEventListener('change', renderHistory);
+document.getElementById('history-search')?.addEventListener('input', renderHistory);
+
+function openEditHistory(id) {
+  syncRefs();
+  const h = txHistory.find(h => h.id == id);
+  if (!h) return;
+  populateClientSelects();
+  document.getElementById('edit-history-id').value = h.id;
+  document.getElementById('edit-history-client').value = h.clientId;
+  document.getElementById('edit-history-type').value = h.type;
+  document.getElementById('edit-history-payment-method').value = h.method || '';
+  document.getElementById('edit-history-amount').value = h.amount;
+  document.getElementById('edit-history-note').value = h.note || '';
+  openModal('modal-edit-history');
+}
+
+function deleteHistory(id) {
+  if (!confirm('Supprimer cette opération ?')) return;
+  appData.history = appData.history.filter(h => h.id != id);
+  save(); syncRefs();
+  renderHistory();
+  renderClientList();
+}
+
+document.getElementById('edit-history-form').addEventListener('submit', e => {
+  e.preventDefault();
+  const id = +document.getElementById('edit-history-id').value;
+  const h = appData.history.find(h => h.id == id);
+  if (!h) return;
+  h.clientId = +document.getElementById('edit-history-client').value;
+  h.type     = document.getElementById('edit-history-type').value;
+  h.method   = document.getElementById('edit-history-payment-method').value;
+  h.amount   = +document.getElementById('edit-history-amount').value;
+  h.note     = document.getElementById('edit-history-note').value;
+  save();
+  showMsg('edit-history-message', 'Opération modifiée.', 'success');
+  setTimeout(() => closeModal('modal-edit-history'), 900);
+  renderHistory();
+  renderClientList();
+});
+
+// ══════════════════════════════════════════════════════════════
+//  USERS MANAGEMENT
+// ══════════════════════════════════════════════════════════════
+function renderUsersList() {
+  syncRefs();
+  const tbody = document.getElementById('users-list');
+  if (!tbody) return;
+  tbody.innerHTML = appData.users.map(u => {
+    const isMe = u.id === currentUser?.id;
+    const badgeCls = `badge-${u.role}`;
+    return `<tr>
+      <td>${u.firstName} ${u.lastName || ''} ${isMe ? '<span style="font-size:10px;color:var(--ink3)">(vous)</span>' : ''}</td>
+      <td>${u.email}</td>
+      <td><span class="badge ${badgeCls}">${ROLE_LABELS[u.role] || u.role}</span></td>
+      <td><span style="font-size:12px;color:${u.active!==false ? 'var(--success)' : 'var(--danger)'}">${u.active!==false ? '● Actif' : '● Inactif'}</span></td>
+      <td style="font-size:12px;color:var(--ink3)">${u.lastLogin || '—'}</td>
+      <td class="td-actions">
+        ${!isMe ? `<button class="btn-icon btn-sm" onclick="toggleUserActive(${u.id})" title="${u.active!==false ? 'Désactiver' : 'Activer'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg></button>` : ''}
+        ${!isMe ? `<button class="btn-icon btn-sm" onclick="deleteUser(${u.id})" title="Supprimer" style="color:var(--danger)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+document.getElementById('user-add-form').addEventListener('submit', e => {
+  e.preventDefault();
+  if (!can('all')) return;
+  const firstName = document.getElementById('new-user-firstname').value.trim();
+  const lastName  = document.getElementById('new-user-lastname').value.trim();
+  const email     = document.getElementById('new-user-email').value.trim();
+  const password  = document.getElementById('new-user-password').value;
+  const role      = document.getElementById('new-user-role').value;
+
+  if (!firstName || !email || !password) return showMsg('user-add-message', 'Remplissez tous les champs.', 'error');
+  if (password.length < 6) return showMsg('user-add-message', 'Mot de passe trop court (6 min).', 'error');
+
+  syncRefs();
+  if (appData.users.find(u => u.email.toLowerCase() === email.toLowerCase()))
+    return showMsg('user-add-message', 'Cet email existe déjà.', 'error');
+
+  appData.users.push({ id: appData.nextUserId++, firstName, lastName, email, password, role, active: true, createdAt: new Date().toISOString() });
+  save();
+  showMsg('user-add-message', 'Utilisateur créé avec succès.', 'success');
+  document.getElementById('user-add-form').reset();
+  renderUsersList();
+});
+
+function toggleUserActive(id) {
+  const u = appData.users.find(u => u.id == id);
+  if (!u) return;
+  u.active = u.active === false ? true : false;
+  save();
+  renderUsersList();
+}
+
+function deleteUser(id) {
+  if (!confirm('Supprimer cet utilisateur ?')) return;
+  appData.users = appData.users.filter(u => u.id != id);
+  save();
+  renderUsersList();
+}
+
+// ══════════════════════════════════════════════════════════════
+//  EXPORT & PRINT
+// ══════════════════════════════════════════════════════════════
+function printHistory() { window.print(); }
+
+function exportCSV() {
+  syncRefs();
+  const rows = [['Date','N° Client','Client','Type','Mode','Montant','Note','Opérateur']];
+  txHistory.forEach(h => {
+    const c = clients.find(cl => cl.id == h.clientId);
+    rows.push([h.date, '#'+String(h.clientId).padStart(3,'0'), c?.name||'', h.type, h.method||'', h.amount.toFixed(2), h.note||'', getUserName(h.operatorId)]);
+  });
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,\uFEFF' + encodeURIComponent(csv);
+  a.download = 'historique-credits-lexpert.csv';
+  a.click();
+}
+
+// ══════════════════════════════════════════════════════════════
+//  MODALS
+// ══════════════════════════════════════════════════════════════
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+document.querySelectorAll('[data-close]').forEach(el => {
+  el.addEventListener('click', () => closeModal(el.dataset.close));
+});
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+});
+
+// ══════════════════════════════════════════════════════════════
+//  INIT — Check session on page load
+// ══════════════════════════════════════════════════════════════
+(function init() {
+  // Apply auth brand from saved settings immediately
+  const saved = DB.get('appdata', null);
+  if (saved?.settings?.companyName) {
+    document.getElementById('auth-brand-name').textContent = saved.settings.companyName;
+    document.getElementById('auth-logo-text').textContent  = saved.settings.companyName.charAt(0).toUpperCase();
+    if (saved.settings.logoData) {
+      document.getElementById('auth-logo-img').src = saved.settings.logoData;
+      document.getElementById('auth-logo-img').style.display = 'block';
+      document.getElementById('auth-logo-text').style.display = 'none';
+    }
+  }
+
+  const session = getSession();
+  if (session) {
+    // Restore session
+    appData = DB.get('appdata', appData);
+    if (!appData.users?.length) appData.users = DEFAULT_USERS;
+    syncRefs();
+    currentUser = appData.users.find(u => u.id === session.userId);
+    if (currentUser && currentUser.active !== false) {
+      launchApp();
+      return;
+    }
+  }
+
+  // Show auth screen
+  document.getElementById('auth-screen').style.display = 'flex';
+})();
+</script>
+</body>
+</html>
