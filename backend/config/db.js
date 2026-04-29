@@ -141,3 +141,17 @@ const db = {
 };
 
 module.exports = db;
+async function testConnection() {
+  try {
+    const connection = await pool.getConnection();
+    console.log('✅ MySQL connecté avec succès');
+    connection.release();
+  } catch (error) {
+    console.error('❌ Erreur connexion MySQL:', error.message);
+  }
+}
+
+module.exports = {
+  pool,
+  testConnection,
+};
