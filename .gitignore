@@ -1,5 +1,33 @@
-node_modules
+# Dependencies
+node_modules/
+
+# Env files (never commit secrets)
 .env
-dist
-build
+.env.local
+.env.production
+*.env
+
+# Build output
+dist/
+build/
+
+# Logs
+backend/logs/
+*.log
+npm-debug.log*
+
+# Uploads (user-generated, not source)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+
+# Old/junk folders not part of the active app
+/lexpert-app/
+/{public,backend
