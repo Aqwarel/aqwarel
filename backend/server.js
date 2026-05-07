@@ -5,19 +5,18 @@
 'use strict';
 
 require('dotenv').config();
-const express   = require('express');
-const cors      = require('cors');
-const helmet    = require('helmet');
-const rateLimit = require('express-rate-limit');
-const path      = require('path');
-const jwt       = require('jsonwebtoken');
-const bcrypt    = require('bcryptjs');
+const express     = require('express');
+const cors        = require('cors');
+const helmet      = require('helmet');
+const compression = require('compression');
+const rateLimit   = require('express-rate-limit');
+const path        = require('path');
+const jwt         = require('jsonwebtoken');
+const bcrypt      = require('bcryptjs');
 
 const db          = require('./config/db');
 const authRoutes  = require('./routes/auth.routes');
 const authMw      = require('./middleware/auth');
-
-db.testConnection();
 
 db.testConnection();
 
@@ -30,8 +29,16 @@ if (isProd) app.set('trust proxy', 1);
 
 // ── Sécurité
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors({ origin: process.env.APP_URL || '*' }));
-app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 1000 }));
+
+// CORS — accepts a comma-separated list in APP_URL (e.g. https://aqwarel.com,https://www.aqwarel.com).
+// In dev, falls back to "*" so Laragon on any port works.
+const corsOrigins = process.env.APP_URL
+  ? process.env.APP_URL.split(',').map(s => s.trim()).filter(Boolean)
+  : '*';
+app.use(cors({ origin: corsOrigins, credentials: true }));
+
+app.use(compression());
+app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 1000, standardHeaders: true, legacyHeaders: false }));
 
 // ── Parsers
 app.use(express.json({ limit: '15mb' }));
