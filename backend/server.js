@@ -5,18 +5,19 @@
 'use strict';
 
 require('dotenv').config();
-const express     = require('express');
-const cors        = require('cors');
-const helmet      = require('helmet');
-const compression = require('compression');
-const rateLimit   = require('express-rate-limit');
-const path        = require('path');
-const jwt         = require('jsonwebtoken');
-const bcrypt      = require('bcryptjs');
+const express   = require('express');
+const cors      = require('cors');
+const helmet    = require('helmet');
+const rateLimit = require('express-rate-limit');
+const path      = require('path');
+const jwt       = require('jsonwebtoken');
+const bcrypt    = require('bcryptjs');
 
 const db          = require('./config/db');
 const authRoutes  = require('./routes/auth.routes');
 const authMw      = require('./middleware/auth');
+
+db.testConnection();
 
 db.testConnection();
 
@@ -29,20 +30,12 @@ if (isProd) app.set('trust proxy', 1);
 
 // ── Sécurité
 app.use(helmet({ contentSecurityPolicy: false }));
-
-// CORS — accepts a comma-separated list in APP_URL (e.g. https://aqwarel.com,https://www.aqwarel.com).
-// In dev, falls back to "*" so Laragon on any port works.
-const corsOrigins = process.env.APP_URL
-  ? process.env.APP_URL.split(',').map(s => s.trim()).filter(Boolean)
-  : '*';
-app.use(cors({ origin: corsOrigins, credentials: true }));
-
-app.use(compression());
-app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 1000, standardHeaders: true, legacyHeaders: false }));
+app.use(cors({ origin: process.env.APP_URL || '*' }));
+app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 1000 }));
 
 // ── Parsers
-app.use(express.json({ limit: '5mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
 // ── Fichiers statiques (frontend)
 app.use(express.static(path.join(__dirname, '..', 'public')));
@@ -115,34 +108,47 @@ app.get('/api/health', async (_req, res) => {
 });
 
 // ============================================================
-//  CLIENTS
+//  CLIENTS  (modele etendu : adresse, ville, CIN, note)
 // ============================================================
-app.get('/api/clients', authOptional, async (_req, res) => {
+app.get('/api/clients', authOptional, async (req, res) => {
   try {
-    const rows = await db.query(
-      `SELECT c.*, COALESCE(SUM(
-        CASE WHEN cr.is_cancelled=0 THEN
-          CASE cr.type
-            WHEN 'ajout'         THEN  cr.amount
-            WHEN 'utilisation'   THEN -cr.amount
-            WHEN 'remboursement' THEN -cr.amount
-            ELSE 0 END
-        ELSE 0 END), 0) AS current_balance
-       FROM clients c
-       LEFT JOIN credits cr ON cr.client_id = c.id
-       WHERE c.is_active = 1
-       GROUP BY c.id
-       ORDER BY c.display_id`
-    );
+    const { search } = req.query;
+    let sql = `SELECT c.*,
+                 (SELECT COUNT(*) FROM credits cr WHERE cr.client_id = c.id AND cr.status <> 'annule')         AS credits_count,
+                 (SELECT COUNT(*) FROM credits cr WHERE cr.client_id = c.id AND cr.status = 'retard')          AS credits_retard,
+                 (SELECT COALESCE(SUM(cr.total_price - cr.down_payment),0) FROM credits cr
+                    WHERE cr.client_id = c.id AND cr.status IN ('en_cours','retard'))                          AS total_to_pay,
+                 (SELECT COALESCE(SUM(e.paid_amount),0) FROM echeances e
+                    JOIN credits cr ON cr.id = e.credit_id
+                    WHERE cr.client_id = c.id AND cr.status IN ('en_cours','retard'))                          AS total_paid_open
+               FROM clients c
+               WHERE c.is_active = 1`;
+    const params = [];
+    if (search) {
+      sql += ` AND (c.first_name LIKE ? OR c.last_name LIKE ? OR c.phone LIKE ? OR c.cin LIKE ? OR c.email LIKE ? OR CAST(c.display_id AS CHAR) = ?)`;
+      const like = '%' + String(search).trim() + '%';
+      params.push(like, like, like, like, like, String(search).trim());
+    }
+    sql += ' ORDER BY c.display_id';
+    const rows = await db.query(sql, params);
     res.json({ success: true, clients: rows });
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+app.get('/api/clients/:id', authOptional, async (req, res) => {
+  try {
+    const id  = +req.params.id;
+    const row = await db.queryOne('SELECT * FROM clients WHERE id = ? AND is_active = 1', [id]);
+    if (!row) return res.status(404).json({ success: false, message: 'Client introuvable.' });
+    res.json({ success: true, client: row });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
 app.post('/api/clients', authOptional, async (req, res) => {
   try {
-    const { first_name, last_name, email, phone } = req.body;
+    const { first_name, last_name, email, phone, cin, address, city, notes } = req.body;
     if (!first_name?.trim())
-      return res.status(400).json({ success: false, message: 'Prénom obligatoire.' });
+      return res.status(400).json({ success: false, message: 'Nom obligatoire.' });
 
     const row = await db.queryOne('SELECT COALESCE(MAX(display_id),0)+1 AS next_id FROM clients');
     const id  = await db.insert('clients', {
@@ -151,6 +157,10 @@ app.post('/api/clients', authOptional, async (req, res) => {
       last_name:  last_name?.trim() || null,
       email:      email?.trim() || null,
       phone:      phone?.trim() || null,
+      cin:        cin?.trim() || null,
+      address:    address?.trim() || null,
+      city:       city?.trim() || null,
+      notes:      notes?.trim() || null,
       created_by: req.user?.id || null,
     });
     res.status(201).json({ success: true, id, display_id: row.next_id });
@@ -164,12 +174,16 @@ app.post('/api/clients', authOptional, async (req, res) => {
 app.put('/api/clients/:id', authOptional, async (req, res) => {
   try {
     const id = +req.params.id;
-    const { first_name, last_name, email, phone } = req.body;
+    const { first_name, last_name, email, phone, cin, address, city, notes } = req.body;
     const data = {};
     if (first_name !== undefined) data.first_name = first_name?.trim() || null;
     if (last_name  !== undefined) data.last_name  = last_name?.trim() || null;
     if (email      !== undefined) data.email      = email?.trim() || null;
     if (phone      !== undefined) data.phone      = phone?.trim() || null;
+    if (cin        !== undefined) data.cin        = cin?.trim() || null;
+    if (address    !== undefined) data.address    = address?.trim() || null;
+    if (city       !== undefined) data.city       = city?.trim() || null;
+    if (notes      !== undefined) data.notes      = notes?.trim() || null;
     if (!Object.keys(data).length)
       return res.status(400).json({ success: false, message: 'Aucun champ à modifier.' });
 
@@ -186,125 +200,314 @@ app.put('/api/clients/:id', authOptional, async (req, res) => {
 app.delete('/api/clients/:id', authOptional, async (req, res) => {
   try {
     const id = +req.params.id;
-    // Soft delete : désactive le client + annule ses crédits
-    await db.transaction(async (conn) => {
-      await conn.execute('UPDATE clients SET is_active=0 WHERE id=?', [id]);
-      await conn.execute(
-        'UPDATE credits SET is_cancelled=1, cancelled_at=NOW() WHERE client_id=? AND is_cancelled=0',
-        [id]
-      );
-    });
+    // Soft-delete : on desactive le client. Les credits restent (historique).
+    const aff = await db.update('clients', { is_active: 0 }, 'id=?', [id]);
+    if (!aff) return res.status(404).json({ success: false, message: 'Client introuvable.' });
     res.json({ success: true });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
 // ============================================================
-//  CREDITS
+//  CREDITS  (nouveau modele : pret a echeances)
 // ============================================================
+
+// Calcule le statut a jour d'un credit en regardant ses echeances
+async function refreshCreditStatus(conn, creditId) {
+  const [[c]] = await conn.execute('SELECT * FROM credits WHERE id = ?', [creditId]);
+  if (!c) return;
+  if (c.status === 'annule') return;
+
+  const [rows] = await conn.execute(
+    `SELECT status, due_date, amount, paid_amount FROM echeances WHERE credit_id = ?`,
+    [creditId]
+  );
+
+  const today = new Date().toISOString().slice(0,10);
+  let allPaid = rows.length > 0;
+  let anyLate = false;
+
+  for (const e of rows) {
+    if (e.status !== 'payee') allPaid = false;
+    if (e.status !== 'payee' && String(e.due_date).slice(0,10) < today) anyLate = true;
+  }
+
+  let newStatus = c.status;
+  if (allPaid)      newStatus = 'paye';
+  else if (anyLate) newStatus = 'retard';
+  else              newStatus = 'en_cours';
+
+  if (newStatus !== c.status) {
+    await conn.execute('UPDATE credits SET status = ? WHERE id = ?', [newStatus, creditId]);
+  }
+  // Recalcule "remaining"
+  const totalPaid = rows.reduce((s,r) => s + parseFloat(r.paid_amount || 0), 0);
+  const remaining = parseFloat(c.total_price) - parseFloat(c.down_payment) - totalPaid;
+  await conn.execute('UPDATE credits SET remaining = ? WHERE id = ?', [Math.max(0, remaining), creditId]);
+}
+
+// GET /api/credits — liste avec filtres
 app.get('/api/credits', authOptional, async (req, res) => {
   try {
-    const { client_id, type } = req.query;
-    const limit  = Math.min(parseInt(req.query.limit  ?? 1000, 10) || 1000, 5000);
-    const offset = Math.max(parseInt(req.query.offset ?? 0, 10) || 0, 0);
+    const { client_id, status, search, from, to } = req.query;
     let sql = `SELECT cr.*,
                  CONCAT(c.first_name,' ',COALESCE(c.last_name,'')) AS client_name,
                  c.display_id AS client_display_id,
-                 pm.name  AS payment_method,
-                 pm.label AS payment_method_label,
-                 CONCAT(u.first_name,' ',COALESCE(u.last_name,'')) AS operator_name
+                 c.phone      AS client_phone,
+                 c.cin        AS client_cin,
+                 CONCAT(u.first_name,' ',COALESCE(u.last_name,'')) AS operator_name,
+                 (SELECT COALESCE(SUM(paid_amount),0) FROM echeances WHERE credit_id = cr.id) AS total_paid_echeances,
+                 (SELECT MIN(due_date) FROM echeances
+                    WHERE credit_id = cr.id AND status IN ('a_payer','retard','partielle')) AS next_due_date
                FROM credits cr
-               LEFT JOIN clients c          ON c.id = cr.client_id
-               LEFT JOIN payment_methods pm ON pm.id = cr.payment_method_id
-               LEFT JOIN users u            ON u.id = cr.user_id
-               WHERE cr.is_cancelled=0`;
+               LEFT JOIN clients c ON c.id = cr.client_id
+               LEFT JOIN users u   ON u.id = cr.user_id
+               WHERE 1=1`;
     const params = [];
-    if (client_id) { sql += ' AND cr.client_id=?'; params.push(+client_id); }
-    if (type)      { sql += ' AND cr.type=?';      params.push(type); }
-    sql += ` ORDER BY cr.operation_date ASC, cr.id ASC LIMIT ${limit} OFFSET ${offset}`;
+    if (client_id) { sql += ' AND cr.client_id = ?'; params.push(+client_id); }
+    if (status)    { sql += ' AND cr.status = ?';    params.push(status); }
+    if (from)      { sql += ' AND cr.start_date >= ?'; params.push(from); }
+    if (to)        { sql += ' AND cr.start_date <= ?'; params.push(to); }
+    if (search) {
+      sql += ` AND (cr.product_name LIKE ? OR c.first_name LIKE ? OR c.last_name LIKE ? OR c.phone LIKE ? OR CAST(cr.id AS CHAR) = ?)`;
+      const like = '%' + String(search).trim() + '%';
+      params.push(like, like, like, like, String(search).trim());
+    }
+    sql += ' ORDER BY cr.created_at DESC LIMIT 1000';
     const rows = await db.query(sql, params);
     res.json({ success: true, credits: rows });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
+// GET /api/credits/:id — detail avec echeances
+app.get('/api/credits/:id', authOptional, async (req, res) => {
+  try {
+    const id = +req.params.id;
+    const credit = await db.queryOne(
+      `SELECT cr.*,
+              CONCAT(c.first_name,' ',COALESCE(c.last_name,'')) AS client_name,
+              c.display_id AS client_display_id,
+              c.phone, c.cin, c.address, c.city
+       FROM credits cr LEFT JOIN clients c ON c.id = cr.client_id WHERE cr.id = ?`,
+      [id]
+    );
+    if (!credit) return res.status(404).json({ success: false, message: 'Crédit introuvable.' });
+    const echeances = await db.query(
+      `SELECT e.*, pm.label AS payment_method_label
+       FROM echeances e LEFT JOIN payment_methods pm ON pm.id = e.payment_method_id
+       WHERE e.credit_id = ? ORDER BY e.installment_no`,
+      [id]
+    );
+    res.json({ success: true, credit, echeances });
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+// POST /api/credits — cree un credit ET genere les echeances automatiquement
 app.post('/api/credits', authOptional, async (req, res) => {
   try {
-    const { client_id, payment_method, amount, operation_date, note, type } = req.body;
-    if (!client_id || !amount || amount <= 0)
-      return res.status(400).json({ success: false, message: 'Paramètres invalides.' });
-    if (!['ajout','utilisation','remboursement'].includes(type))
-      return res.status(400).json({ success: false, message: 'Type invalide.' });
+    const {
+      client_id, product_name, total_price, down_payment,
+      num_installments, start_date, note,
+    } = req.body;
 
-    const pmId = await resolvePaymentMethodId(payment_method);
+    if (!client_id || !product_name?.trim())
+      return res.status(400).json({ success: false, message: 'Client et produit obligatoires.' });
+
+    const total = parseFloat(total_price) || 0;
+    const down  = parseFloat(down_payment) || 0;
+    const n     = parseInt(num_installments, 10) || 1;
+    if (total <= 0)         return res.status(400).json({ success: false, message: 'Prix total invalide.' });
+    if (down < 0 || down > total)
+      return res.status(400).json({ success: false, message: 'Avance invalide.' });
+    if (n < 1)              return res.status(400).json({ success: false, message: 'Nombre d\'échéances invalide.' });
+
+    const remaining = total - down;
+    // Arrondi a 2 decimales pour les n-1 premieres, derniere = solde exact
+    const baseAmt = Math.floor((remaining / n) * 100) / 100;
+    const lastAmt = Math.round((remaining - baseAmt * (n - 1)) * 100) / 100;
+
+    const startDate = start_date || new Date().toISOString().slice(0,10);
 
     const result = await db.transaction(async (conn) => {
-      const [[bal]] = await conn.execute(
-        `SELECT COALESCE(SUM(
-           CASE WHEN type='ajout' THEN amount
-                WHEN type IN ('utilisation','remboursement') THEN -amount
-                ELSE 0 END), 0) AS balance
-         FROM credits WHERE client_id=? AND is_cancelled=0 FOR UPDATE`,
-        [+client_id]
-      );
-      const before = parseFloat(bal.balance);
-      const amt    = parseFloat(amount);
-      const after  = type === 'ajout' ? before + amt : before - amt;
-      if (after < 0 && type !== 'ajout') throw new Error('INSUFFICIENT_BALANCE');
-
       const [ins] = await conn.execute(
         `INSERT INTO credits
-           (client_id, user_id, type, payment_method_id, amount, balance_before, balance_after, operation_date, note)
-         VALUES (?,?,?,?,?,?,?,?,?)`,
+           (client_id, user_id, product_name, total_price, down_payment, remaining,
+            num_installments, installment_amount, start_date, status, note)
+         VALUES (?,?,?,?,?,?,?,?,?, 'en_cours', ?)`,
         [
-          +client_id,
-          req.user?.id || null,
-          type,
-          pmId,
-          amt,
-          before,
-          after,
-          operation_date || new Date().toISOString().slice(0,10),
-          note || null,
+          +client_id, req.user?.id || null,
+          String(product_name).trim(),
+          total, down, remaining,
+          n, baseAmt, startDate, note?.trim() || null,
         ]
       );
-      return { id: ins.insertId, balance_before: before, balance_after: after };
+      const creditId = ins.insertId;
+
+      // Genere les echeances : une par mois a partir de start_date
+      const baseDate = new Date(startDate + 'T00:00:00Z');
+      for (let i = 0; i < n; i++) {
+        const due = new Date(baseDate);
+        due.setUTCMonth(due.getUTCMonth() + i + 1);
+        const dueStr = due.toISOString().slice(0,10);
+        const amt = (i === n - 1) ? lastAmt : baseAmt;
+        await conn.execute(
+          `INSERT INTO echeances (credit_id, installment_no, due_date, amount, status)
+           VALUES (?,?,?,?, 'a_payer')`,
+          [creditId, i + 1, dueStr, amt]
+        );
+      }
+
+      await refreshCreditStatus(conn, creditId);
+      return creditId;
     });
-    res.status(201).json({ success: true, ...result });
+
+    res.status(201).json({ success: true, id: result });
   } catch (e) {
-    if (e.message === 'INSUFFICIENT_BALANCE')
-      return res.status(400).json({ success: false, message: 'Solde insuffisant.' });
     res.status(500).json({ success: false, message: e.message });
   }
 });
 
+// PUT /api/credits/:id — modifier infos basiques (sans regenerer les echeances)
 app.put('/api/credits/:id', authOptional, async (req, res) => {
   try {
     const id = +req.params.id;
-    const { client_id, type, payment_method, amount, note, operation_date } = req.body;
+    const { product_name, note, status } = req.body;
     const data = {};
-    if (client_id      !== undefined) data.client_id = +client_id;
-    if (type           !== undefined) data.type      = type;
-    if (amount         !== undefined) data.amount    = parseFloat(amount);
-    if (note           !== undefined) data.note      = note || null;
-    if (operation_date !== undefined) data.operation_date = operation_date;
-    if (payment_method !== undefined) data.payment_method_id = await resolvePaymentMethodId(payment_method);
+    if (product_name !== undefined) data.product_name = String(product_name).trim();
+    if (note         !== undefined) data.note         = note?.trim() || null;
+    if (status       !== undefined) {
+      if (!['en_cours','paye','retard','annule'].includes(status))
+        return res.status(400).json({ success: false, message: 'Statut invalide.' });
+      data.status = status;
+    }
     if (!Object.keys(data).length)
       return res.status(400).json({ success: false, message: 'Aucun champ à modifier.' });
 
     const aff = await db.update('credits', data, 'id=?', [id]);
-    if (!aff) return res.status(404).json({ success: false, message: 'Opération introuvable.' });
+    if (!aff) return res.status(404).json({ success: false, message: 'Crédit introuvable.' });
     res.json({ success: true });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
+// DELETE /api/credits/:id — annulation (soft)
 app.delete('/api/credits/:id', authOptional, async (req, res) => {
   try {
     const id  = +req.params.id;
-    const aff = await db.update(
-      'credits',
-      { is_cancelled: 1, cancelled_at: new Date(), cancelled_by: req.user?.id || null },
-      'id=?', [id]
+    const aff = await db.update('credits', { status: 'annule' }, 'id=?', [id]);
+    if (!aff) return res.status(404).json({ success: false, message: 'Crédit introuvable.' });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+// ============================================================
+//  ECHEANCES  (installments)
+// ============================================================
+
+// GET /api/echeances — liste avec filtres : retard, jour, semaine
+app.get('/api/echeances', authOptional, async (req, res) => {
+  try {
+    const { credit_id, status, due_from, due_to, scope } = req.query;
+    let sql = `SELECT e.*,
+                 cr.product_name, cr.client_id,
+                 CONCAT(c.first_name,' ',COALESCE(c.last_name,'')) AS client_name,
+                 c.display_id AS client_display_id,
+                 c.phone      AS client_phone,
+                 pm.label     AS payment_method_label
+               FROM echeances e
+               LEFT JOIN credits  cr ON cr.id = e.credit_id
+               LEFT JOIN clients  c  ON c.id  = cr.client_id
+               LEFT JOIN payment_methods pm ON pm.id = e.payment_method_id
+               WHERE 1=1`;
+    const params = [];
+    if (credit_id) { sql += ' AND e.credit_id = ?'; params.push(+credit_id); }
+    if (status)    { sql += ' AND e.status = ?';    params.push(status); }
+    if (due_from)  { sql += ' AND e.due_date >= ?'; params.push(due_from); }
+    if (due_to)    { sql += ' AND e.due_date <= ?'; params.push(due_to); }
+
+    if (scope === 'today') {
+      sql += ' AND e.due_date = CURDATE() AND e.status <> \'payee\'';
+    } else if (scope === 'week') {
+      sql += ' AND e.due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY) AND e.status <> \'payee\'';
+    } else if (scope === 'overdue') {
+      sql += ' AND e.due_date < CURDATE() AND e.status <> \'payee\'';
+    }
+
+    sql += ' ORDER BY e.due_date ASC, e.installment_no ASC LIMIT 2000';
+    const rows = await db.query(sql, params);
+    res.json({ success: true, echeances: rows });
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+// PUT /api/echeances/:id/pay — encaisse un paiement (total ou partiel)
+app.put('/api/echeances/:id/pay', authOptional, async (req, res) => {
+  try {
+    const id = +req.params.id;
+    const { amount, payment_method, payment_date, note } = req.body;
+    const pmId  = await resolvePaymentMethodId(payment_method);
+    const today = payment_date || new Date().toISOString().slice(0,10);
+
+    const result = await db.transaction(async (conn) => {
+      const [[e]] = await conn.execute('SELECT * FROM echeances WHERE id = ? FOR UPDATE', [id]);
+      if (!e) throw new Error('NOT_FOUND');
+      if (e.status === 'payee') throw new Error('ALREADY_PAID');
+
+      const due       = parseFloat(e.amount);
+      const already   = parseFloat(e.paid_amount || 0);
+      const toPay     = amount === undefined ? (due - already) : parseFloat(amount);
+      if (toPay <= 0) throw new Error('INVALID_AMOUNT');
+
+      const newPaid   = already + toPay;
+      const newStatus = newPaid + 0.005 >= due ? 'payee' : 'partielle';
+
+      await conn.execute(
+        `UPDATE echeances
+         SET paid_amount = ?, status = ?, paid_at = ?, payment_method_id = ?, note = COALESCE(?, note)
+         WHERE id = ?`,
+        [newPaid, newStatus, newStatus === 'payee' ? new Date() : null, pmId, note || null, id]
+      );
+
+      // Trace dans payments
+      await conn.execute(
+        `INSERT INTO payments (echeance_id, client_id, user_id, payment_method_id, amount, payment_date, note, status)
+         SELECT ?, cr.client_id, ?, ?, ?, ?, ?, 'validated'
+         FROM credits cr WHERE cr.id = ?`,
+        [id, req.user?.id || null, pmId, toPay, today, note || null, e.credit_id]
+      );
+
+      await refreshCreditStatus(conn, e.credit_id);
+      return { paid_amount: newPaid, status: newStatus };
+    });
+
+    res.json({ success: true, ...result });
+  } catch (e) {
+    if (e.message === 'NOT_FOUND')      return res.status(404).json({ success: false, message: 'Échéance introuvable.' });
+    if (e.message === 'ALREADY_PAID')   return res.status(400).json({ success: false, message: 'Échéance déjà payée.' });
+    if (e.message === 'INVALID_AMOUNT') return res.status(400).json({ success: false, message: 'Montant invalide.' });
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+// PUT /api/echeances/:id/mark-late — force le statut "retard" (utile manuel)
+app.put('/api/echeances/:id/mark-late', authOptional, async (req, res) => {
+  try {
+    const id  = +req.params.id;
+    const aff = await db.update('echeances', { status: 'retard' }, 'id=? AND status <> \'payee\'', [id]);
+    if (!aff) return res.status(404).json({ success: false, message: 'Échéance introuvable ou déjà payée.' });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+});
+
+// POST /api/echeances/refresh-overdue — recalcule les retards (a appeler periodiquement)
+app.post('/api/echeances/refresh-overdue', authOptional, async (_req, res) => {
+  try {
+    await db.query(
+      `UPDATE echeances SET status = 'retard'
+       WHERE status IN ('a_payer','partielle') AND due_date < CURDATE()`
     );
-    if (!aff) return res.status(404).json({ success: false, message: 'Opération introuvable.' });
+    // Met a jour les statuts des credits
+    const creditIds = await db.query(`SELECT DISTINCT id FROM credits WHERE status <> 'annule'`);
+    await db.transaction(async (conn) => {
+      for (const c of creditIds) await refreshCreditStatus(conn, c.id);
+    });
     res.json({ success: true });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });

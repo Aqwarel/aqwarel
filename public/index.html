@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>lexpert — Gestion des Crédits Clients</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <style>
 :root {
   --bg:           #f4f1eb;
@@ -162,10 +164,18 @@ td { padding: 11px 16px; font-size: 13px; color: var(--ink); vertical-align: mid
 .badge-ajout        { background: var(--success-soft); color: var(--success); }
 .badge-utilisation  { background: var(--warn-soft);    color: var(--warn); }
 .badge-remboursement{ background: var(--danger-soft);  color: var(--danger); }
+.badge-paye, .badge-payee { background: var(--success-soft); color: var(--success); }
+.badge-en_cours, .badge-a_payer { background: var(--surface2); color: var(--ink2); }
+.badge-partielle    { background: var(--warn-soft);    color: var(--warn); }
+.badge-retard       { background: var(--danger-soft);  color: var(--danger); }
+.badge-annule       { background: var(--surface2);     color: var(--ink3); }
 .badge-admin   { background: #f0edfc; color: #5333bb; }
 .badge-manager { background: #e6f1fb; color: #185fa5; }
 .badge-cashier { background: var(--warn-soft); color: var(--warn); }
 .badge-viewer  { background: var(--surface2); color: var(--ink2); }
+.role-select { padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; background: var(--surface); color: var(--ink); cursor: pointer; }
+.role-select:hover { border-color: var(--accent); }
+.role-select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 28px; }
 @media (max-width: 800px) { .stats-grid { grid-template-columns: repeat(2,1fr); } }
 .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); position: relative; overflow: hidden; }
@@ -194,6 +204,30 @@ td { padding: 11px 16px; font-size: 13px; color: var(--ink); vertical-align: mid
 .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(24,20,15,0.55); z-index: 500; align-items: center; justify-content: center; backdrop-filter: blur(3px); }
 .modal-overlay.open { display: flex; }
 .modal-box { background: var(--surface); border-radius: var(--radius); padding: 28px; width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-lg); animation: modalIn 0.2s ease; }
+.muted { color: var(--ink3); font-size: 12px; }
+.input-with-btn { display: flex; gap: 6px; align-items: stretch; }
+.input-with-btn > input, .input-with-btn > select { flex: 1; }
+.input-with-btn > .btn { white-space: nowrap; padding: 9px 12px; }
+.search-input { width: 100%; padding: 10px 14px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-family: var(--font-body); font-size: 14px; outline: none; background: var(--surface); }
+.search-input:focus { border-color: var(--accent); }
+.filter-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 14px 24px; }
+.filter-row > select, .filter-row > input { padding: 8px 12px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-family: var(--font-body); font-size: 13px; outline: none; background: var(--surface); }
+.filter-row > input[type=text] { flex: 1; min-width: 180px; }
+.scope-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+.status-badge { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.st-en_cours, .st-a_payer  { background: #e6f0fa; color: #1f4f8b; }
+.st-paye, .st-payee        { background: var(--success-soft); color: var(--success); }
+.st-retard                 { background: var(--danger-soft); color: var(--danger); }
+.st-annule                 { background: #efece5; color: var(--ink3); }
+.st-partielle              { background: #fff4e0; color: #ad6e10; }
+.modal-box.modal-lg { max-width: 720px; }
+.table-wrap { overflow-x: auto; }
+.echeances-mini { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+.echeances-mini th, .echeances-mini td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+.echeances-mini th { font-size: 11px; text-transform: uppercase; color: var(--ink3); letter-spacing: .04em; }
+.credit-info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 18px; padding: 14px; background: var(--surface2); border-radius: var(--radius-sm); margin-bottom: 12px; }
+.credit-info-grid div span { display: block; font-size: 11px; color: var(--ink3); text-transform: uppercase; letter-spacing: .04em; }
+.credit-info-grid div strong { font-size: 14px; color: var(--ink); font-weight: 600; }
 @keyframes modalIn { from { opacity: 0; transform: scale(0.94) translateY(-8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
 .modal-box h3 { font-family: var(--font-serif); font-size: 19px; font-weight: 400; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
 .modal-close { background: none; border: none; cursor: pointer; font-size: 20px; color: var(--ink3); padding: 0; line-height: 1; }
@@ -316,10 +350,10 @@ td { padding: 11px 16px; font-size: 13px; color: var(--ink); vertical-align: mid
 
 <nav id="main-nav">
   <button data-tab="dashboard"><span class="nav-icon">⊞</span> Tableau de bord</button>
-  <button data-tab="payments"><span class="nav-icon">💳</span> Paiements</button>
-  <button data-tab="sales"><span class="nav-icon">🛒</span> Ventes</button>
-  <button data-tab="analysis"><span class="nav-icon">📊</span> Analyse</button>
   <button data-tab="clients"><span class="nav-icon">👥</span> Clients</button>
+  <button data-tab="credits"><span class="nav-icon">💳</span> Crédits</button>
+  <button data-tab="echeances"><span class="nav-icon">📅</span> Échéances</button>
+  <button data-tab="analysis"><span class="nav-icon">📊</span> Analyse</button>
   <button data-tab="users" id="nav-users" style="display:none"><span class="nav-icon">🔑</span> Utilisateurs</button>
   <button data-tab="settings"><span class="nav-icon">⚙</span> Paramètres</button>
 </nav>
@@ -330,137 +364,182 @@ td { padding: 11px 16px; font-size: 13px; color: var(--ink); vertical-align: mid
     <h2>Tableau de bord</h2>
     <div class="session-info" id="session-info">🔒 <span id="session-detail"></span></div>
     <div class="stats-grid">
-      <div class="stat-card stat-added"><label>Total accordé</label><div class="stat-value" id="db-stat-added">0,00 MAD</div></div>
-      <div class="stat-card stat-used"><label>Total utilisé</label><div class="stat-value" id="db-stat-used">0,00 MAD</div></div>
-      <div class="stat-card stat-refunded"><label>Total remboursé</label><div class="stat-value" id="db-stat-refunded">0,00 MAD</div></div>
-      <div class="stat-card stat-balance"><label>Solde global</label><div class="stat-value" id="db-stat-balance">0,00 MAD</div></div>
+      <div class="stat-card stat-added"><label>Total des crédits</label><div class="stat-value" id="db-stat-total">0,00 MAD</div></div>
+      <div class="stat-card stat-used"><label>Total payé</label><div class="stat-value" id="db-stat-paid">0,00 MAD</div></div>
+      <div class="stat-card stat-refunded"><label>Total restant</label><div class="stat-value" id="db-stat-remaining">0,00 MAD</div></div>
+      <div class="stat-card stat-balance"><label>Crédits en retard</label><div class="stat-value" id="db-stat-late">0</div></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
-      <div class="chart-card">
-        <h3>Opérations — 6 derniers mois</h3>
-        <div class="chart-wrap" id="db-chart"></div>
-        <div class="chart-legend">
-          <div class="legend-item"><div class="legend-dot" style="background:var(--success)"></div>Ajouts</div>
-          <div class="legend-item"><div class="legend-dot" style="background:var(--warn)"></div>Utilisations</div>
-          <div class="legend-item"><div class="legend-dot" style="background:var(--danger)"></div>Remboursements</div>
+      <div class="card">
+        <div class="table-card-header"><h3>📅 Échéances du jour</h3><span class="muted" id="db-today-count">0</span></div>
+        <table><thead><tr><th>Client</th><th>Produit</th><th>Montant</th><th></th></tr></thead><tbody id="db-today"></tbody></table>
+      </div>
+      <div class="card">
+        <div class="table-card-header"><h3>⚠️ Crédits en retard</h3><span class="muted" id="db-late-count">0</span></div>
+        <table><thead><tr><th>Client</th><th>Produit</th><th>Restant</th><th></th></tr></thead><tbody id="db-late"></tbody></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- CREDITS -->
+  <section id="credits" class="tab">
+    <h2>Crédits</h2>
+    <div class="form-grid-2">
+      <div class="card">
+        <h3>➕ Nouveau crédit</h3>
+        <form id="credit-add-form">
+          <label>Client
+            <div class="input-with-btn">
+              <input type="text" id="cr-client-search" list="cr-client-list" placeholder="Tapez nom, téléphone ou n°..." autocomplete="off" />
+              <datalist id="cr-client-list"></datalist>
+              <input type="hidden" id="cr-client" required />
+              <button type="button" class="btn btn-secondary" id="btn-scan-cr-client" title="Scanner le QR du client">📷 QR</button>
+            </div>
+          </label>
+          <label>Produit acheté <input type="text" id="cr-product" placeholder="Ex: Réfrigérateur Samsung 350L" required /></label>
+          <div class="inline-grid">
+            <label>Prix total (MAD) <input type="number" id="cr-total" step="0.01" min="0.01" required /></label>
+            <label>Avance (MAD) <input type="number" id="cr-down" step="0.01" min="0" value="0" /></label>
+          </div>
+          <div class="inline-grid">
+            <label>Nombre d'échéances <input type="number" id="cr-num" step="1" min="1" max="60" value="6" required /></label>
+            <label>Date de début <input type="date" id="cr-start" required /></label>
+          </div>
+          <label>Observation <textarea id="cr-note" rows="2"></textarea></label>
+          <div id="cr-preview" class="muted" style="margin-bottom:10px"></div>
+          <button type="submit">Créer le crédit + générer les échéances</button>
+          <div id="cr-message" class="message"></div>
+        </form>
+      </div>
+      <div class="card">
+        <h3>🔍 Recherche</h3>
+        <input type="text" id="cr-search" placeholder="Nom, téléphone, produit, n°..." class="search-input" />
+        <div class="filter-row">
+          <select id="cr-filter-status">
+            <option value="">Tous les statuts</option>
+            <option value="en_cours">En cours</option>
+            <option value="retard">En retard</option>
+            <option value="paye">Payé</option>
+            <option value="annule">Annulé</option>
+          </select>
+          <input type="date" id="cr-filter-from" title="Date début (du)" />
+          <input type="date" id="cr-filter-to"   title="Date début (au)" />
+          <button type="button" class="btn btn-secondary btn-sm" id="cr-filter-reset">Réinit</button>
         </div>
       </div>
-      <div class="card">
-        <h3>Dernières opérations</h3>
-        <table><thead><tr><th>Client</th><th>Type</th><th>Montant</th><th>Date</th></tr></thead><tbody id="db-recent"></tbody></table>
-      </div>
-    </div>
-  </section>
-
-  <!-- PAYMENTS -->
-  <section id="payments" class="tab">
-    <h2>Crédits clients</h2>
-    <div id="payments-restricted" class="access-denied" style="display:none"><h3>Accès restreint</h3><p>Votre rôle ne vous permet pas d'effectuer des paiements.</p></div>
-    <div id="payments-content" class="form-grid-2">
-      <div class="card">
-        <h3>➕ Ajouter un crédit</h3>
-        <form id="credit-add-form">
-          <label>Client <select id="add-client"></select></label>
-          <label>Nom du client <input type="text" id="add-client-name" readonly /></label>
-          <label>Mode de paiement <select id="add-payment-method"><option value="">Choisir un mode</option><option>Espèces</option><option>Carte</option><option>Virement</option><option>Chèque</option></select></label>
-          <label>Montant (MAD) <input type="number" id="add-amount" step="0.01" min="0.01" placeholder="0.00" /></label>
-          <label>Date <input type="date" id="add-date" /></label>
-          <label>Note <textarea id="add-note" rows="2" placeholder="Optionnel…"></textarea></label>
-          <button type="submit">Ajouter le crédit</button>
-          <div id="add-message" class="message"></div>
-        </form>
-      </div>
-      <div class="card">
-        <h3>↩ Rembourser un crédit</h3>
-        <form id="refund-form">
-          <label>Client <select id="refund-client"></select></label>
-          <label>Nom du client <input type="text" id="refund-client-name" readonly /></label>
-          <label>Solde actuel <input type="text" id="refund-balance" readonly /></label>
-          <label>Mode <select id="refund-payment-method"><option value="">Choisir un mode</option><option>Espèces</option><option>Carte</option><option>Virement</option><option>Chèque</option></select></label>
-          <label>Montant (MAD) <input type="number" id="refund-amount" step="0.01" min="0.01" placeholder="0.00" /></label>
-          <label>Date <input type="date" id="refund-date" /></label>
-          <label>Note <textarea id="refund-note" rows="2" placeholder="Optionnel…"></textarea></label>
-          <button type="submit">Rembourser</button>
-          <div id="refund-message" class="message"></div>
-        </form>
-      </div>
-    </div>
-  </section>
-
-  <!-- SALES -->
-  <section id="sales" class="tab">
-    <h2>Ventes</h2>
-    <div class="card" style="max-width:480px">
-      <h3>🛒 Utiliser un crédit lors d'une vente</h3>
-      <form id="usage-form">
-        <label>Client <select id="usage-client"></select></label>
-        <label>Nom du client <input type="text" id="usage-client-name" readonly /></label>
-        <label>Solde disponible <input type="text" id="usage-balance" readonly /></label>
-        <label>Montant utilisé (MAD) <input type="number" id="usage-amount" step="0.01" min="0.01" placeholder="0.00" /></label>
-        <label>Note <textarea id="usage-note" rows="2">Utilisation dans une vente</textarea></label>
-        <button type="submit">Utiliser le crédit</button>
-        <div id="usage-message" class="message"></div>
-      </form>
     </div>
     <div class="table-card">
-      <div class="table-card-header"><h3>Solde actuel par client</h3></div>
-      <table><thead><tr><th>N°</th><th>Client</th><th>Solde</th></tr></thead><tbody id="sales-balances"></tbody></table>
+      <div class="table-card-header"><h3>Liste des crédits</h3><span class="muted" id="cr-count">0</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>N°</th>
+              <th>Client</th>
+              <th>Produit</th>
+              <th>Total</th>
+              <th>Avance</th>
+              <th>Restant</th>
+              <th>Échéances</th>
+              <th>Statut</th>
+              <th>Prochaine</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="credits-list"></tbody>
+        </table>
+      </div>
     </div>
   </section>
 
-  <!-- ANALYSIS -->
+  <!-- ECHEANCES -->
+  <section id="echeances" class="tab">
+    <h2>Échéances</h2>
+    <div class="card">
+      <div class="filter-row">
+        <button type="button" class="btn btn-secondary btn-sm scope-btn" data-scope="">Toutes</button>
+        <button type="button" class="btn btn-secondary btn-sm scope-btn" data-scope="today">Aujourd'hui</button>
+        <button type="button" class="btn btn-secondary btn-sm scope-btn" data-scope="week">7 jours</button>
+        <button type="button" class="btn btn-danger btn-sm scope-btn" data-scope="overdue">En retard</button>
+        <select id="ec-filter-status">
+          <option value="">Tous les statuts</option>
+          <option value="a_payer">À payer</option>
+          <option value="payee">Payée</option>
+          <option value="retard">En retard</option>
+          <option value="partielle">Partielle</option>
+        </select>
+        <input type="text" id="ec-search" placeholder="Recherche client/produit..." />
+      </div>
+    </div>
+    <div class="table-card">
+      <div class="table-card-header"><h3>Liste des échéances</h3><span class="muted" id="ec-count">0</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>N°</th>
+              <th>Date due</th>
+              <th>Client</th>
+              <th>Produit</th>
+              <th>Montant</th>
+              <th>Payé</th>
+              <th>Reste</th>
+              <th>Statut</th>
+              <th>Date paiement</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="echeances-list"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ANALYSIS (basique en P2 - enrichi en P3) -->
   <section id="analysis" class="tab">
     <h2>Analyse</h2>
     <div class="stats-grid">
-      <div class="stat-card stat-added"><label>Total accordé</label><div class="stat-value" id="stat-added">0,00 MAD</div></div>
-      <div class="stat-card stat-used"><label>Total utilisé</label><div class="stat-value" id="stat-used">0,00 MAD</div></div>
-      <div class="stat-card stat-refunded"><label>Total remboursé</label><div class="stat-value" id="stat-refunded">0,00 MAD</div></div>
-      <div class="stat-card stat-balance"><label>Solde global</label><div class="stat-value" id="stat-balance">0,00 MAD</div></div>
+      <div class="stat-card stat-added"><label>Total des crédits</label><div class="stat-value" id="stat-total">0,00 MAD</div></div>
+      <div class="stat-card stat-used"><label>Total payé</label><div class="stat-value" id="stat-paid">0,00 MAD</div></div>
+      <div class="stat-card stat-refunded"><label>Total restant</label><div class="stat-value" id="stat-remaining">0,00 MAD</div></div>
+      <div class="stat-card stat-balance"><label>Crédits en cours</label><div class="stat-value" id="stat-active">0</div></div>
     </div>
-    <div class="chart-card">
-      <h3>Historique des opérations (6 derniers mois)</h3>
-      <div class="chart-wrap" id="chart-wrap"></div>
-      <div class="chart-legend">
-        <div class="legend-item"><div class="legend-dot" style="background:var(--success)"></div>Ajouts</div>
-        <div class="legend-item"><div class="legend-dot" style="background:var(--warn)"></div>Utilisations</div>
-        <div class="legend-item"><div class="legend-dot" style="background:var(--danger)"></div>Remboursements</div>
-      </div>
-    </div>
+    <p class="muted" style="margin-top:18px">Graphiques et analyses détaillées disponibles en Phase 3.</p>
   </section>
 
   <!-- CLIENTS -->
   <section id="clients" class="tab">
     <h2>Clients</h2>
-    <div class="card" style="max-width:520px">
+    <div class="card" style="max-width:640px">
       <h3>➕ Ajouter un client</h3>
+      <button type="button" class="btn btn-secondary" id="btn-scan-existing-client" style="margin-bottom:12px">📷 Scanner QR d'un client existant</button>
       <form id="client-form">
-        <label>Nom complet <input type="text" id="client-name" placeholder="Nom du client" /></label>
+        <label>Nom complet <input type="text" id="client-name" placeholder="Nom complet" required /></label>
         <div class="inline-grid">
-          <label>Email <input type="email" id="client-email" placeholder="email@exemple.com" /></label>
           <label>Téléphone <input type="text" id="client-telephone" placeholder="06XXXXXXXX" /></label>
+          <label>CIN <input type="text" id="client-cin" placeholder="AB123456" /></label>
         </div>
+        <label>Adresse <input type="text" id="client-address" placeholder="Adresse complète" /></label>
+        <div class="inline-grid">
+          <label>Ville <input type="text" id="client-city" placeholder="Casablanca" /></label>
+          <label>Email <input type="email" id="client-email" placeholder="email@exemple.com" /></label>
+        </div>
+        <label>Note / observation <textarea id="client-notes" rows="2" placeholder="Optionnel..."></textarea></label>
         <button type="submit">Ajouter le client</button>
         <div id="client-message" class="message"></div>
       </form>
     </div>
-    <div class="table-card">
-      <div class="table-card-header"><h3>Liste des clients</h3></div>
-      <table><thead><tr><th>N°</th><th>Nom</th><th>Email</th><th>Téléphone</th><th>Solde</th><th>Actions</th></tr></thead><tbody id="client-list"></tbody></table>
+    <div class="card" style="max-width:640px;margin-top:20px">
+      <input type="text" id="client-search" placeholder="🔍 Rechercher (nom, téléphone, CIN...)" class="search-input" />
     </div>
     <div class="table-card">
-      <div class="table-card-header">
-        <h3>Historique détaillé</h3>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-secondary btn-sm no-print" onclick="printHistory()">🖨 Imprimer</button>
-          <button class="btn btn-secondary btn-sm no-print" onclick="exportCSV()">⬇ CSV</button>
-        </div>
+      <div class="table-card-header"><h3>Liste des clients</h3><span class="muted" id="clients-count"></span></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>N°</th><th>Nom</th><th>Téléphone</th><th>CIN</th><th>Ville</th><th>Crédits</th><th>Restant</th><th>Actions</th></tr></thead>
+          <tbody id="client-list"></tbody>
+        </table>
       </div>
-      <div class="toolbar">
-        <label>Client <select id="history-client-filter"><option value="">Tous les clients</option></select></label>
-        <label>Recherche <input type="text" id="history-search" placeholder="Nom, note, type…" /></label>
-      </div>
-      <table><thead><tr><th>Date</th><th>N°</th><th>Client</th><th>Type</th><th>Mode</th><th>Montant</th><th>Note</th><th>Par</th><th>Actions</th></tr></thead><tbody id="credit-history"></tbody></table>
-      <div id="history-empty"></div>
     </div>
   </section>
 
@@ -531,15 +610,23 @@ td { padding: 11px 16px; font-size: 13px; color: var(--ink); vertical-align: mid
 
 <!-- MODALS -->
 <div class="modal-overlay" id="modal-edit-client">
-  <div class="modal-box">
+  <div class="modal-box modal-lg">
     <h3>Modifier le client <button class="modal-close" data-close="modal-edit-client">×</button></h3>
     <form id="edit-client-form">
       <input type="hidden" id="edit-client-id" />
       <label>Nom complet <input type="text" id="edit-client-name" required /></label>
-      <label>Email <input type="email" id="edit-client-email" /></label>
-      <label>Téléphone <input type="text" id="edit-client-telephone" /></label>
+      <div class="inline-grid">
+        <label>Téléphone <input type="text" id="edit-client-telephone" /></label>
+        <label>CIN <input type="text" id="edit-client-cin" /></label>
+      </div>
+      <label>Adresse <input type="text" id="edit-client-address" /></label>
+      <div class="inline-grid">
+        <label>Ville <input type="text" id="edit-client-city" /></label>
+        <label>Email <input type="email" id="edit-client-email" /></label>
+      </div>
+      <label>Note <textarea id="edit-client-notes" rows="2"></textarea></label>
       <div class="modal-actions">
-        <button type="submit" class="btn btn-primary">Modifier</button>
+        <button type="submit" class="btn btn-primary">Enregistrer</button>
         <button type="button" class="btn btn-secondary" data-close="modal-edit-client">Annuler</button>
       </div>
       <div id="edit-client-message" class="message"></div>
@@ -547,22 +634,71 @@ td { padding: 11px 16px; font-size: 13px; color: var(--ink); vertical-align: mid
   </div>
 </div>
 
-<div class="modal-overlay" id="modal-edit-history">
+<!-- MODAL : Detail credit + echeances -->
+<div class="modal-overlay" id="modal-credit-detail">
+  <div class="modal-box modal-lg">
+    <h3>Détail du crédit <button class="modal-close" data-close="modal-credit-detail">×</button></h3>
+    <div id="credit-detail-body"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-secondary" data-close="modal-credit-detail">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL : Encaisser une echeance -->
+<div class="modal-overlay" id="modal-pay-echeance">
   <div class="modal-box">
-    <h3>Modifier l'opération <button class="modal-close" data-close="modal-edit-history">×</button></h3>
-    <form id="edit-history-form">
-      <input type="hidden" id="edit-history-id" />
-      <label>Client <select id="edit-history-client"></select></label>
-      <label>Type <select id="edit-history-type"><option value="ajout">Ajout</option><option value="utilisation">Utilisation</option><option value="remboursement">Remboursement</option></select></label>
-      <label>Mode <select id="edit-history-payment-method"><option value="">Choisir un mode</option><option>Espèces</option><option>Carte</option><option>Virement</option><option>Chèque</option></select></label>
-      <label>Montant (MAD) <input type="number" id="edit-history-amount" step="0.01" min="0.01" /></label>
-      <label>Note <textarea id="edit-history-note" rows="3"></textarea></label>
+    <h3>Encaisser l'échéance <button class="modal-close" data-close="modal-pay-echeance">×</button></h3>
+    <form id="pay-echeance-form">
+      <input type="hidden" id="pay-echeance-id" />
+      <div id="pay-echeance-info" class="muted" style="margin-bottom:12px"></div>
+      <label>Montant à encaisser (MAD) <input type="number" id="pay-amount" step="0.01" min="0.01" required /></label>
+      <label>Mode de paiement
+        <select id="pay-method">
+          <option value="especes">Espèces</option>
+          <option value="carte">Carte</option>
+          <option value="virement">Virement</option>
+          <option value="cheque">Chèque</option>
+        </select>
+      </label>
+      <label>Date <input type="date" id="pay-date" /></label>
+      <label>Note <textarea id="pay-note" rows="2"></textarea></label>
       <div class="modal-actions">
-        <button type="submit" class="btn btn-primary">Enregistrer</button>
-        <button type="button" class="btn btn-secondary" data-close="modal-edit-history">Annuler</button>
+        <button type="submit" class="btn btn-primary">Encaisser</button>
+        <button type="button" class="btn btn-secondary" data-close="modal-pay-echeance">Annuler</button>
       </div>
-      <div id="edit-history-message" class="message"></div>
+      <div id="pay-message" class="message"></div>
     </form>
+  </div>
+</div>
+
+<!-- MODAL : Scanner QR client -->
+<div class="modal-overlay" id="modal-scanner">
+  <div class="modal-box">
+    <h3>Scanner un QR client <button class="modal-close" data-close="modal-scanner">×</button></h3>
+    <p class="muted" style="margin-bottom:10px">Pointe la caméra vers le QR code du client.</p>
+    <div id="scanner-region" style="width:100%;min-height:280px;background:#000;border-radius:var(--radius-sm);overflow:hidden"></div>
+    <div id="scanner-message" class="message" style="margin-top:10px"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-secondary" data-close="modal-scanner">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL : Afficher QR client -->
+<div class="modal-overlay" id="modal-client-qr">
+  <div class="modal-box">
+    <h3>QR Code client <button class="modal-close" data-close="modal-client-qr">×</button></h3>
+    <div style="text-align:center">
+      <div id="client-qr-name" style="font-size:14px;color:var(--ink2);margin-bottom:6px"></div>
+      <div id="client-qr-id"   style="font-size:12px;color:var(--ink3);margin-bottom:14px"></div>
+      <div id="client-qr-canvas" style="display:inline-block;background:white;padding:14px;border:1px solid var(--border);border-radius:var(--radius-sm)"></div>
+      <div class="muted" style="margin-top:10px">Imprimez ce QR pour le donner au client.</div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-primary" id="btn-print-client-qr">Imprimer</button>
+      <button type="button" class="btn btn-secondary" data-close="modal-client-qr">Fermer</button>
+    </div>
   </div>
 </div>
 
@@ -596,6 +732,8 @@ let appClients  = [];
 let appHistory  = [];
 let appUsers    = [];
 let appSettings = { creditsEnabled:true, companyName:'lexpert', address:'', phone1:'', phone2:'', trackingMode:'detail', logoData:null };
+let scannerInstance = null;
+let scannerCallback = null;
 
 // ══════════════════════════════════════════════
 //  LOCAL STORAGE (settings & logo only)
@@ -806,16 +944,21 @@ async function launchApp() {
   await Promise.all([
     loadClients(),
     loadHistory(),
+    loadCredits(),
+    loadEcheances(),
     loadUsers(),
     loadApiSettings(),
   ]);
 
   populateClientSelects();
+  populateCreditClientSearch();
   refreshPaymentsSelects();
   renderDashboard();
   renderSalesBalances();
   renderClientList();
   renderHistory();
+  renderCredits();
+  renderEcheances();
   renderAnalysis();
   renderUsersList();
 
@@ -838,10 +981,11 @@ async function loadClients() {
   const data = await api('/clients');
   if (data?.success) {
     appClients = data.clients.map(c => ({
-      id:    c.id,
-      name:  (c.first_name + ' ' + (c.last_name||'')).trim(),
-      email: c.email||'',
-      tel:   c.phone||'',
+      id:        c.id,
+      displayId: c.display_id ?? c.id,
+      name:      (c.first_name + ' ' + (c.last_name||'')).trim(),
+      email:     c.email||'',
+      tel:       c.phone||'',
     }));
   }
 }
@@ -874,10 +1018,179 @@ async function loadUsers() {
       email:     u.email,
       role:      u.role_name || u.role,
       active:    u.is_active !== 0,
-      lastLogin: u.last_login_at ? new Date(u.last_login_at).toLocaleString('fr-FR') : null,
+      lastLogin: u.last_login_at ? (() => { const d = new Date(u.last_login_at); const dd = String(d.getDate()).padStart(2,'0'); const mm = String(d.getMonth()+1).padStart(2,'0'); const yy = String(d.getFullYear()).slice(2); const hh = String(d.getHours()).padStart(2,'0'); const mn = String(d.getMinutes()).padStart(2,'0'); return `${dd}/${mm}/${yy} ${hh}:${mn}`; })() : null,
     }));
   }
 }
+
+let appCredits = [];
+async function loadCredits() {
+  const data = await api('/credits');
+  if (data?.success) {
+    appCredits = data.credits || [];
+  }
+}
+
+function renderCredits() {
+  const tbody = document.getElementById('credits-list');
+  if (!tbody) return;
+  const search = (document.getElementById('cr-search')?.value || '').trim().toLowerCase();
+  const status = document.getElementById('cr-filter-status')?.value || '';
+  const from   = document.getElementById('cr-filter-from')?.value   || '';
+  const to     = document.getElementById('cr-filter-to')?.value     || '';
+
+  let rows = appCredits.filter(cr => {
+    if (status && cr.status !== status) return false;
+    const sd = (cr.start_date || '').slice(0,10);
+    if (from && sd && sd < from) return false;
+    if (to   && sd && sd > to)   return false;
+    if (search) {
+      const hay = [
+        cr.client_name, cr.client_phone, cr.client_cin, cr.product_name,
+        '#'+String(cr.client_display_id||'').padStart(3,'0'),
+        String(cr.id),
+      ].filter(Boolean).join(' ').toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
+
+  document.getElementById('cr-count').textContent = rows.length + (rows.length>1?' crédits':' crédit');
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--ink3);padding:24px">Aucun crédit trouvé.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(cr => {
+    const total = parseFloat(cr.total_price || 0);
+    const down  = parseFloat(cr.down_payment || 0);
+    const rem   = parseFloat(cr.remaining || 0);
+    return `<tr>
+      <td>#${cr.id}</td>
+      <td>${cr.client_name||'—'}<div class="muted" style="font-size:11px">${cr.client_phone||''}</div></td>
+      <td>${cr.product_name||'—'}</td>
+      <td>${fmt(total)}</td>
+      <td>${fmt(down)}</td>
+      <td style="font-weight:600">${fmt(rem)}</td>
+      <td>${cr.num_installments||'—'}</td>
+      <td><span class="badge badge-${cr.status}">${cr.status||'—'}</span></td>
+      <td>${fmtDate(cr.next_due_date)||'—'}</td>
+      <td class="td-actions"></td>
+    </tr>`;
+  }).join('');
+}
+
+['cr-search','cr-filter-status','cr-filter-from','cr-filter-to'].forEach(id => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const evt = el.tagName === 'SELECT' || el.type === 'date' ? 'change' : 'input';
+  el.addEventListener(evt, renderCredits);
+});
+document.getElementById('cr-filter-reset')?.addEventListener('click', () => {
+  ['cr-search','cr-filter-status','cr-filter-from','cr-filter-to'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  renderCredits();
+});
+
+let appEcheances = [];
+let ecScope = '';
+async function loadEcheances() {
+  const data = await api('/echeances');
+  if (data?.success) {
+    appEcheances = data.echeances || [];
+  }
+}
+
+function renderEcheances() {
+  const tbody = document.getElementById('echeances-list');
+  if (!tbody) return;
+  const status = document.getElementById('ec-filter-status')?.value || '';
+  const search = (document.getElementById('ec-search')?.value || '').trim().toLowerCase();
+  const today  = new Date().toISOString().slice(0,10);
+  const in7    = (() => { const d = new Date(); d.setDate(d.getDate()+7); return d.toISOString().slice(0,10); })();
+
+  let rows = appEcheances.filter(e => {
+    const dd = (e.due_date || '').slice(0,10);
+    if (ecScope === 'today'   && !(dd === today && e.status !== 'payee')) return false;
+    if (ecScope === 'week'    && !(dd >= today && dd <= in7 && e.status !== 'payee')) return false;
+    if (ecScope === 'overdue' && !(dd <  today && e.status !== 'payee')) return false;
+    if (status && e.status !== status) return false;
+    if (search) {
+      const hay = [e.client_name, e.client_phone, e.product_name].filter(Boolean).join(' ').toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
+
+  document.getElementById('ec-count').textContent = String(rows.length);
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--ink3);padding:24px">Aucune échéance trouvée.</td></tr>';
+    return;
+  }
+  const canPay = can('credits.create');
+  tbody.innerHTML = rows.map(e => {
+    const due  = parseFloat(e.amount||0);
+    const pay  = parseFloat(e.paid_amount||0);
+    const rest = Math.max(0, due - pay);
+    const isLate = (e.due_date||'').slice(0,10) < today && e.status !== 'payee';
+    const stCls = e.status === 'payee' ? 'paye' : isLate ? 'retard' : e.status === 'partielle' ? 'en_cours' : 'en_cours';
+    return `<tr>
+      <td>${e.installment_no}</td>
+      <td>${fmtDate(e.due_date)||'—'}</td>
+      <td>${e.client_name||'—'}<div class="muted" style="font-size:11px">${e.client_phone||''}</div></td>
+      <td>${e.product_name||'—'}</td>
+      <td>${fmt(due)}</td>
+      <td>${fmt(pay)}</td>
+      <td style="font-weight:600">${fmt(rest)}</td>
+      <td><span class="badge badge-${stCls}">${e.status||'—'}</span></td>
+      <td>${fmtDate(e.paid_at)||'—'}</td>
+      <td class="td-actions">
+        ${canPay && e.status !== 'payee' ? `<button class="btn btn-sm btn-primary" onclick="payEcheance(${e.id})">Encaisser</button>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function payEcheance(id) {
+  const e = appEcheances.find(x => x.id == id);
+  if (!e) return;
+  const due  = parseFloat(e.amount||0);
+  const pay  = parseFloat(e.paid_amount||0);
+  const rest = Math.max(0, due - pay);
+  const inp = prompt(`Montant à encaisser (reste: ${fmt(rest)}) :`, rest.toFixed(2));
+  if (inp === null) return;
+  const amount = parseFloat(inp);
+  if (!amount || amount <= 0) return showToast('Montant invalide.');
+  const method = prompt('Mode de paiement (especes / carte / virement / cheque) :', 'especes');
+  if (!method) return;
+  const data = await api('/echeances/' + id + '/pay', {
+    method: 'PUT',
+    body: JSON.stringify({ amount, payment_method: method }),
+  });
+  if (data?.success) {
+    await Promise.all([loadEcheances(), loadCredits()]);
+    renderEcheances();
+    renderCredits();
+    renderDashboard();
+    renderAnalysis();
+    showToast('Paiement enregistré.');
+  } else {
+    showToast(data?.message || 'Erreur lors du paiement.');
+  }
+}
+
+document.getElementById('ec-filter-status')?.addEventListener('change', renderEcheances);
+document.getElementById('ec-search')?.addEventListener('input', renderEcheances);
+document.querySelectorAll('.scope-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    ecScope = btn.dataset.scope || '';
+    document.querySelectorAll('.scope-btn').forEach(b => b.classList.toggle('active', b === btn));
+    renderEcheances();
+  });
+});
 
 async function loadApiSettings() {
   const data = await api('/settings');
@@ -889,7 +1202,10 @@ async function loadApiSettings() {
     appSettings.phone2         = s.company_phone_2 || appSettings.phone2;
     appSettings.creditsEnabled = s.credits_enabled !== '0';
     appSettings.trackingMode   = s.tracking_mode   || appSettings.trackingMode;
+    if (s.logo_data) appSettings.logoData = s.logo_data;
+    LS.set('settings', appSettings);
     applyHeaderInfo();
+    applyLogo();
   }
 }
 
@@ -900,6 +1216,13 @@ function fmt(n) {
   return Number(n).toLocaleString('fr-MA', { minimumFractionDigits:2, maximumFractionDigits:2 }) + ' MAD';
 }
 function today() { return new Date().toISOString().slice(0,10); }
+function fmtDate(d) {
+  if (!d) return '';
+  const s = String(d).slice(0,10);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return s;
+  return `${m[3]}/${m[2]}/${m[1].slice(2)}`;
+}
 
 function clientBalance(id) {
   return appHistory.filter(h => h.clientId == id).reduce((acc, h) => {
@@ -932,6 +1255,13 @@ function switchTab(tab) {
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab===tab));
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.id===tab));
   if (tab==='dashboard') renderDashboard();
+  if (tab==='credits')   {
+    populateCreditClientSearch();
+    renderCredits();
+    const cs = document.getElementById('cr-start');
+    if (cs && !cs.value) cs.value = today();
+  }
+  if (tab==='echeances') renderEcheances();
   if (tab==='payments')  { populateClientSelects(); refreshPaymentsSelects(); }
   if (tab==='sales')     { populateClientSelects(); renderSalesBalances(); }
   if (tab==='analysis')  renderAnalysis();
@@ -953,24 +1283,52 @@ document.addEventListener('click', e => {
 // ══════════════════════════════════════════════
 //  DASHBOARD
 // ══════════════════════════════════════════════
-function renderDashboard() {
-  const added    = appHistory.filter(h=>h.type==='ajout').reduce((a,h)=>a+h.amount,0);
-  const used     = appHistory.filter(h=>h.type==='utilisation').reduce((a,h)=>a+h.amount,0);
-  const refunded = appHistory.filter(h=>h.type==='remboursement').reduce((a,h)=>a+h.amount,0);
-  document.getElementById('db-stat-added').textContent    = fmt(added);
-  document.getElementById('db-stat-used').textContent     = fmt(used);
-  document.getElementById('db-stat-refunded').textContent = fmt(refunded);
-  document.getElementById('db-stat-balance').textContent  = fmt(added - used - refunded);
+function creditTotals() {
+  const live = appCredits.filter(cr => cr.status !== 'annule');
+  const total     = live.reduce((s,cr) => s + parseFloat(cr.total_price||0), 0);
+  const remaining = live.reduce((s,cr) => s + parseFloat(cr.remaining||0),   0);
+  const paid      = total - remaining;
+  const lateCount = live.filter(cr => cr.status === 'retard').length;
+  const activeCount = live.filter(cr => cr.status === 'en_cours' || cr.status === 'retard').length;
+  return { total, paid, remaining, lateCount, activeCount };
+}
 
-  const recent = [...appHistory].reverse().slice(0,6);
-  const tbody = document.getElementById('db-recent');
-  tbody.innerHTML = !recent.length
-    ? '<tr><td colspan="4" style="text-align:center;color:var(--ink3);padding:20px">Aucune opération.</td></tr>'
-    : recent.map(h => {
-        const c = appClients.find(cl => cl.id==h.clientId);
-        return `<tr><td>${c?.name||'—'}</td><td><span class="badge badge-${h.type}">${h.type}</span></td><td style="font-weight:600">${fmt(h.amount)}</td><td style="color:var(--ink3)">${h.date||'—'}</td></tr>`;
-      }).join('');
-  renderChartInto('db-chart');
+function renderDashboard() {
+  const t = creditTotals();
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('db-stat-total',     fmt(t.total));
+  set('db-stat-paid',      fmt(t.paid));
+  set('db-stat-remaining', fmt(t.remaining));
+  set('db-stat-late',      String(t.lateCount));
+
+  const today = new Date().toISOString().slice(0,10);
+  const todays = appEcheances.filter(e => (e.due_date||'').slice(0,10) === today && e.status !== 'payee');
+  const todayTbody = document.getElementById('db-today');
+  if (todayTbody) {
+    set('db-today-count', String(todays.length));
+    todayTbody.innerHTML = !todays.length
+      ? '<tr><td colspan="4" style="text-align:center;color:var(--ink3);padding:20px">Aucune échéance aujourd\'hui.</td></tr>'
+      : todays.map(e => `<tr>
+          <td>${e.client_name||'—'}</td>
+          <td>${e.product_name||'—'}</td>
+          <td style="font-weight:600">${fmt(parseFloat(e.amount)-parseFloat(e.paid_amount||0))}</td>
+          <td>${can('credits.create') ? `<button class="btn btn-sm btn-primary" onclick="payEcheance(${e.id})">Encaisser</button>` : ''}</td>
+        </tr>`).join('');
+  }
+
+  const lateCredits = appCredits.filter(cr => cr.status === 'retard');
+  const lateTbody = document.getElementById('db-late');
+  if (lateTbody) {
+    set('db-late-count', String(lateCredits.length));
+    lateTbody.innerHTML = !lateCredits.length
+      ? '<tr><td colspan="4" style="text-align:center;color:var(--ink3);padding:20px">Aucun crédit en retard.</td></tr>'
+      : lateCredits.map(cr => `<tr>
+          <td>${cr.client_name||'—'}</td>
+          <td>${cr.product_name||'—'}</td>
+          <td style="font-weight:600;color:var(--danger)">${fmt(cr.remaining)}</td>
+          <td></td>
+        </tr>`).join('');
+  }
 }
 
 // ══════════════════════════════════════════════
@@ -1046,6 +1404,7 @@ document.getElementById('settings-form').addEventListener('submit', async e => {
       company_phone_2: appSettings.phone2,
       credits_enabled: appSettings.creditsEnabled ? '1' : '0',
       tracking_mode:   appSettings.trackingMode,
+      logo_data:       appSettings.logoData || '',
     }),
   });
 
@@ -1074,6 +1433,29 @@ function populateClientSelects() {
   });
 }
 
+function clientLabel(c) {
+  const num = '#' + String(c.displayId ?? c.id).padStart(3,'0');
+  const tel = c.tel ? ' — ' + c.tel : '';
+  return `${num} — ${c.name}${tel}`;
+}
+
+function populateCreditClientSearch() {
+  const list = document.getElementById('cr-client-list');
+  if (!list) return;
+  list.innerHTML = '';
+  appClients.forEach(c => {
+    const o = document.createElement('option');
+    o.value = clientLabel(c);
+    list.appendChild(o);
+  });
+}
+
+document.getElementById('cr-client-search')?.addEventListener('input', () => {
+  const v = document.getElementById('cr-client-search').value;
+  const c = appClients.find(c => clientLabel(c) === v);
+  document.getElementById('cr-client').value = c ? c.id : '';
+});
+
 // ══════════════════════════════════════════════
 //  PAYMENTS
 // ══════════════════════════════════════════════
@@ -1100,41 +1482,56 @@ function updateRefundBalance() {
 document.getElementById('add-client')?.addEventListener('change', () => updateClientNameField('add-client','add-client-name'));
 document.getElementById('refund-client')?.addEventListener('change', () => { updateClientNameField('refund-client','refund-client-name'); updateRefundBalance(); });
 
-document.getElementById('credit-add-form').addEventListener('submit', async e => {
+document.getElementById('credit-add-form')?.addEventListener('submit', async e => {
   e.preventDefault();
-  if (!can('credits.create')) return showMsg('add-message','Permission refusée.','error');
-  const cId    = +document.getElementById('add-client').value;
-  if (!cId)  return showMsg('add-message','Veuillez sélectionner un client.','error');
-  const amount = +document.getElementById('add-amount').value;
-  if (!amount||amount<=0) return showMsg('add-message','Montant invalide.','error');
-  const method = document.getElementById('add-payment-method').value;
-  if (!method) return showMsg('add-message','Veuillez choisir un mode de paiement.','error');
+  if (!can('credits.create')) return showMsg('cr-message','Permission refusée.','error');
+
+  const cId      = +document.getElementById('cr-client').value;
+  const product  = document.getElementById('cr-product').value.trim();
+  const total    = parseFloat(document.getElementById('cr-total').value);
+  const down     = parseFloat(document.getElementById('cr-down').value) || 0;
+  const num      = parseInt(document.getElementById('cr-num').value, 10) || 1;
+  const start    = document.getElementById('cr-start').value || today();
+  const note     = document.getElementById('cr-note').value.trim();
+
+  if (!cId)               return showMsg('cr-message','Veuillez sélectionner un client.','error');
+  if (!product)           return showMsg('cr-message','Produit obligatoire.','error');
+  if (!total || total<=0) return showMsg('cr-message','Prix total invalide.','error');
+  if (down < 0 || down > total) return showMsg('cr-message','Avance invalide.','error');
+  if (num < 1)            return showMsg('cr-message','Nombre d\'échéances invalide.','error');
 
   const data = await api('/credits', {
     method: 'POST',
     body: JSON.stringify({
-      client_id:      cId,
-      type:           'ajout',
-      payment_method: method,
-      amount,
-      operation_date: document.getElementById('add-date').value,
-      note:           document.getElementById('add-note').value,
+      client_id:        cId,
+      product_name:     product,
+      total_price:      total,
+      down_payment:     down,
+      num_installments: num,
+      start_date:       start,
+      note:             note || null,
     }),
   });
 
   if (data?.success) {
-    showMsg('add-message','Crédit ajouté avec succès.','success');
+    showMsg('cr-message','Crédit créé avec succès. Échéances générées.','success');
     document.getElementById('credit-add-form').reset();
-    document.getElementById('add-date').value = today();
-    await loadHistory();
+    document.getElementById('cr-client').value = '';
+    document.getElementById('cr-down').value = 0;
+    document.getElementById('cr-num').value = 6;
+    document.getElementById('cr-start').value = today();
+    await Promise.all([loadCredits(), loadEcheances()]);
+    renderCredits();
+    renderEcheances();
     renderDashboard();
+    renderAnalysis();
     renderClientList();
   } else {
-    showMsg('add-message', data?.message || 'Erreur lors de l\'ajout.','error');
+    showMsg('cr-message', data?.message || 'Erreur lors de la création.','error');
   }
 });
 
-document.getElementById('refund-form').addEventListener('submit', async e => {
+document.getElementById('refund-form')?.addEventListener('submit', async e => {
   e.preventDefault();
   if (!can('credits.create')) return showMsg('refund-message','Permission refusée.','error');
   const cId    = +document.getElementById('refund-client').value;
@@ -1181,7 +1578,7 @@ document.getElementById('usage-client')?.addEventListener('change', () => {
   document.getElementById('usage-balance').value      = c ? fmt(clientBalance(c.id)) : '';
 });
 
-document.getElementById('usage-form').addEventListener('submit', async e => {
+document.getElementById('usage-form')?.addEventListener('submit', async e => {
   e.preventDefault();
   if (!can('sales.create')) return showMsg('usage-message','Permission refusée.','error');
   const cId    = +document.getElementById('usage-client').value;
@@ -1229,14 +1626,12 @@ function renderSalesBalances() {
 //  ANALYSIS
 // ══════════════════════════════════════════════
 function renderAnalysis() {
-  const added    = appHistory.filter(h=>h.type==='ajout').reduce((a,h)=>a+h.amount,0);
-  const used     = appHistory.filter(h=>h.type==='utilisation').reduce((a,h)=>a+h.amount,0);
-  const refunded = appHistory.filter(h=>h.type==='remboursement').reduce((a,h)=>a+h.amount,0);
-  document.getElementById('stat-added').textContent    = fmt(added);
-  document.getElementById('stat-used').textContent     = fmt(used);
-  document.getElementById('stat-refunded').textContent = fmt(refunded);
-  document.getElementById('stat-balance').textContent  = fmt(added - used - refunded);
-  renderChartInto('chart-wrap');
+  const t = creditTotals();
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('stat-total',     fmt(t.total));
+  set('stat-paid',      fmt(t.paid));
+  set('stat-remaining', fmt(t.remaining));
+  set('stat-active',    String(t.activeCount));
 }
 
 function renderChartInto(containerId) {
@@ -1317,12 +1712,13 @@ function renderClientList() {
     const canEdit = can('clients.update');
     const canDel  = can('clients.delete') || can('all');
     return `<tr>
-      <td>#${String(c.id).padStart(3,'0')}</td>
+      <td>#${String(c.displayId ?? c.id).padStart(3,'0')}</td>
       <td>${c.name}</td>
       <td>${c.email||'—'}</td>
       <td>${c.tel||'—'}</td>
       <td class="${cls}">${fmt(bal)}</td>
       <td class="td-actions">
+        <button class="btn-icon" onclick="openClientQr(${c.id})" title="Voir le QR code"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM20 14h1v1h-1zM14 20h1v1h-1zM20 20h1v1h-1zM17 17h3v3h-3z"/></svg></button>
         ${canEdit ? `<button class="btn-icon" onclick="openEditClient(${c.id})" title="Modifier"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>` : ''}
         ${canDel  ? `<button class="btn-icon" onclick="deleteClient(${c.id})" title="Supprimer" style="color:var(--danger)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>` : ''}
       </td>
@@ -1406,7 +1802,7 @@ function renderHistory() {
   tbody.innerHTML = rows.map(h => {
     const c = appClients.find(cl => cl.id==h.clientId);
     return `<tr>
-      <td>${h.date||'—'}</td>
+      <td>${fmtDate(h.date)||'—'}</td>
       <td>#${String(h.clientId).padStart(3,'0')}</td>
       <td>${c?.name||'—'}</td>
       <td><span class="badge badge-${h.type}">${h.type}</span></td>
@@ -1451,7 +1847,7 @@ async function deleteHistory(id) {
   }
 }
 
-document.getElementById('edit-history-form').addEventListener('submit', async e => {
+document.getElementById('edit-history-form')?.addEventListener('submit', async e => {
   e.preventDefault();
   const id = +document.getElementById('edit-history-id').value;
   const data = await api('/credits/' + id, {
@@ -1486,7 +1882,11 @@ function renderUsersList() {
     return `<tr>
       <td>${u.firstName} ${u.lastName||''} ${isMe ? '<span style="font-size:10px;color:var(--ink3)">(vous)</span>' : ''}</td>
       <td>${u.email}</td>
-      <td><span class="badge badge-${u.role}">${ROLE_LABELS[u.role]||u.role}</span></td>
+      <td>${isMe
+        ? `<span class="badge badge-${u.role}">${ROLE_LABELS[u.role]||u.role}</span>`
+        : `<select class="role-select" onchange="changeUserRole(${u.id}, this.value, '${u.role}')">
+             ${Object.entries(ROLE_LABELS).map(([k,v]) => `<option value="${k}" ${k===u.role?'selected':''}>${v}</option>`).join('')}
+           </select>`}</td>
       <td><span style="font-size:12px;color:${u.active ? 'var(--success)' : 'var(--danger)'}">${u.active ? '● Actif' : '● Inactif'}</span></td>
       <td style="font-size:12px;color:var(--ink3)">${u.lastLogin||'—'}</td>
       <td class="td-actions">
@@ -1532,6 +1932,28 @@ async function toggleUserActive(id, currentActive) {
   else showToast(data?.message || 'Erreur.');
 }
 
+async function changeUserRole(id, newRole, oldRole) {
+  if (!can('all')) { showToast('Permission refusée.'); return; }
+  if (newRole === oldRole) return;
+  const u = appUsers.find(x => x.id === id);
+  if (!confirm(`Changer le rôle de ${u?.firstName||''} ${u?.lastName||''} en « ${ROLE_LABELS[newRole]} » ?`)) {
+    renderUsersList();
+    return;
+  }
+  const data = await api('/users/' + id, {
+    method: 'PUT',
+    body: JSON.stringify({ role: newRole }),
+  });
+  if (data?.success) {
+    showToast('Rôle mis à jour.');
+    await loadUsers();
+    renderUsersList();
+  } else {
+    showToast(data?.message || 'Erreur.');
+    renderUsersList();
+  }
+}
+
 async function deleteUser(id) {
   if (!confirm('Supprimer cet utilisateur ?')) return;
   const data = await api('/users/' + id, { method: 'DELETE' });
@@ -1548,7 +1970,7 @@ function exportCSV() {
   const rows = [['Date','N° Client','Client','Type','Mode','Montant','Note','Opérateur']];
   appHistory.forEach(h => {
     const c = appClients.find(cl => cl.id==h.clientId);
-    rows.push([h.date, '#'+String(h.clientId).padStart(3,'0'), c?.name||'', h.type, h.method||'', h.amount.toFixed(2), h.note||'', getUserName(h.operatorName, h.operatorId)]);
+    rows.push([fmtDate(h.date), '#'+String(h.clientId).padStart(3,'0'), c?.name||'', h.type, h.method||'', h.amount.toFixed(2), h.note||'', getUserName(h.operatorName, h.operatorId)]);
   });
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
   const a = document.createElement('a');
@@ -1565,6 +1987,173 @@ function closeModal(id) { document.getElementById(id).classList.remove('open'); 
 document.querySelectorAll('[data-close]').forEach(el => el.addEventListener('click', () => closeModal(el.dataset.close)));
 document.querySelectorAll('.modal-overlay').forEach(overlay => {
   overlay.addEventListener('click', e => { if (e.target===overlay) overlay.classList.remove('open'); });
+});
+
+// ══════════════════════════════════════════════
+//  CLIENT QR CODE — generation, affichage, scan
+// ══════════════════════════════════════════════
+
+// Format du QR : "lexpert:client:<display_id>"
+const CLIENT_QR_PREFIX = 'lexpert:client:';
+
+function buildClientQrPayload(displayId) {
+  return CLIENT_QR_PREFIX + String(displayId);
+}
+
+// Accepte : "lexpert:client:42", "client:42", "42", "  42  "
+function parseClientQrPayload(raw) {
+  if (!raw) return null;
+  let s = String(raw).trim();
+  if (s.startsWith(CLIENT_QR_PREFIX)) s = s.slice(CLIENT_QR_PREFIX.length);
+  else if (s.startsWith('client:'))   s = s.slice('client:'.length);
+  s = s.trim();
+  if (!/^\d+$/.test(s)) return null;
+  return parseInt(s, 10);
+}
+
+function findClientByDisplayId(displayId) {
+  return appClients.find(c => Number(c.displayId ?? c.display_id) === Number(displayId)) || null;
+}
+
+// ── Affichage / impression du QR d'un client
+function openClientQr(clientId) {
+  const c = appClients.find(x => x.id == clientId);
+  if (!c) return;
+  const displayId = c.displayId ?? c.display_id ?? c.id;
+  const payload   = buildClientQrPayload(displayId);
+
+  document.getElementById('client-qr-name').textContent = c.name || '';
+  document.getElementById('client-qr-id').textContent   = '#' + String(displayId).padStart(3,'0');
+  const box = document.getElementById('client-qr-canvas');
+  box.innerHTML = '';
+  if (window.QRCode) {
+    new QRCode(box, { text: payload, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+  } else {
+    box.textContent = payload;
+  }
+  openModal('modal-client-qr');
+}
+
+document.getElementById('btn-print-client-qr').addEventListener('click', () => {
+  const name = document.getElementById('client-qr-name').textContent;
+  const id   = document.getElementById('client-qr-id').textContent;
+  const img  = document.querySelector('#client-qr-canvas img, #client-qr-canvas canvas');
+  if (!img) return;
+  const src  = img.tagName === 'IMG' ? img.src : img.toDataURL('image/png');
+  const w    = window.open('', '_blank', 'width=420,height=560');
+  w.document.write(`
+    <html><head><title>QR ${name}</title>
+    <style>body{font-family:sans-serif;text-align:center;padding:30px}
+    h2{font-weight:400;margin:0 0 6px}p{color:#666;margin:0 0 18px}
+    img{border:1px solid #ddd;padding:10px;background:#fff}</style></head>
+    <body><h2>${name}</h2><p>${id}</p><img src="${src}"><script>window.onload=()=>setTimeout(()=>window.print(),200)<\/script></body></html>`);
+  w.document.close();
+});
+
+// ── Scanner caméra (réutilisable pour tout type de QR)
+async function openScanner(onDecoded) {
+  if (!window.Html5Qrcode) {
+    alert('Bibliothèque scanner introuvable. Vérifie ta connexion internet.');
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert('Caméra non disponible (HTTPS requis sur mobile).');
+    return;
+  }
+  scannerCallback = onDecoded;
+  document.getElementById('scanner-message').textContent = '';
+  openModal('modal-scanner');
+
+  try {
+    scannerInstance = new Html5Qrcode('scanner-region');
+    const cameras = await Html5Qrcode.getCameras();
+    if (!cameras || !cameras.length) {
+      showMsg('scanner-message', 'Aucune caméra détectée.', 'error');
+      return;
+    }
+    const camId = (cameras.find(c => /back|rear|environment/i.test(c.label))?.id) || cameras[0].id;
+    await scannerInstance.start(
+      camId,
+      { fps: 10, qrbox: { width: 240, height: 240 } },
+      (decoded) => {
+        const code = String(decoded || '').trim();
+        if (!code) return;
+        stopScanner();
+        closeModal('modal-scanner');
+        if (typeof scannerCallback === 'function') scannerCallback(code);
+      },
+      () => {}
+    );
+  } catch (err) {
+    showMsg('scanner-message', 'Erreur caméra : ' + err.message, 'error');
+  }
+}
+
+async function stopScanner() {
+  if (scannerInstance) {
+    try { await scannerInstance.stop(); await scannerInstance.clear(); } catch {}
+    scannerInstance = null;
+  }
+}
+
+// Helper : scanne, parse, sélectionne un client dans un <select>
+function scanClientIntoSelect(selectId, messageId) {
+  openScanner((raw) => {
+    const displayId = parseClientQrPayload(raw);
+    if (displayId == null) {
+      if (messageId) showMsg(messageId, 'QR invalide : "' + raw + '"', 'error');
+      return;
+    }
+    const c = findClientByDisplayId(displayId);
+    if (!c) {
+      if (messageId) showMsg(messageId, 'Client #' + displayId + ' introuvable.', 'error');
+      return;
+    }
+    const sel = document.getElementById(selectId);
+    if (sel) {
+      sel.value = c.id;
+      sel.dispatchEvent(new Event('change'));
+    }
+    if (messageId) showMsg(messageId, 'Client : ' + c.name, 'success');
+  });
+}
+
+// Si la modal scanner se ferme manuellement, arrête la caméra
+document.querySelectorAll('[data-close="modal-scanner"]').forEach(el =>
+  el.addEventListener('click', stopScanner)
+);
+document.getElementById('modal-scanner').addEventListener('click', e => {
+  if (e.target.id === 'modal-scanner') stopScanner();
+});
+
+// ── Bouton scan dans "Ajouter un crédit" → sélectionne le client
+document.getElementById('btn-scan-add-client').addEventListener('click', () => {
+  scanClientIntoSelect('add-client', 'add-message');
+});
+
+// ── Bouton scan dans "Ajouter un client" → vérifie l'existant
+document.getElementById('btn-scan-existing-client').addEventListener('click', () => {
+  openScanner((raw) => {
+    const displayId = parseClientQrPayload(raw);
+    if (displayId == null) {
+      showMsg('client-message', 'QR invalide : "' + raw + '"', 'error');
+      return;
+    }
+    const c = findClientByDisplayId(displayId);
+    if (!c) {
+      showMsg('client-message', 'Aucun client #' + displayId + ' (vous pouvez le créer ci-dessous).', 'error');
+      return;
+    }
+    // Client trouvé → propose de basculer vers la page Crédits
+    showMsg('client-message', 'Client trouvé : ' + c.name + ' (#' + String(displayId).padStart(3,'0') + ').', 'success');
+    if (confirm('Client "' + c.name + '" déjà enregistré. Aller sur la page Crédits pour ajouter un paiement ?')) {
+      switchTab('payments');
+      setTimeout(() => {
+        const sel = document.getElementById('add-client');
+        if (sel) { sel.value = c.id; sel.dispatchEvent(new Event('change')); }
+      }, 100);
+    }
+  });
 });
 
 // ══════════════════════════════════════════════
