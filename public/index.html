@@ -966,12 +966,13 @@ async function launchApp() {
 }
 
 function applyRoleRestrictions() {
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.style.display = val; };
   const canPay = can('credits.create');
-  document.getElementById('payments-restricted').style.display = canPay ? 'none' : 'block';
-  document.getElementById('payments-content').style.display    = canPay ? '' : 'none';
+  set('payments-restricted', canPay ? 'none' : 'block');
+  set('payments-content',    canPay ? '' : 'none');
   const canAdmin = can('all');
-  document.getElementById('users-restricted').style.display = canAdmin ? 'none' : 'block';
-  document.getElementById('users-content').style.display    = canAdmin ? '' : 'none';
+  set('users-restricted', canAdmin ? 'none' : 'block');
+  set('users-content',    canAdmin ? '' : 'none');
 }
 
 // ══════════════════════════════════════════════
