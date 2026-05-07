@@ -1463,20 +1463,24 @@ function refreshPaymentsSelects() {
   updateClientNameField('add-client','add-client-name');
   updateClientNameField('refund-client','refund-client-name');
   updateRefundBalance();
-  document.getElementById('add-date').value    = today();
-  document.getElementById('refund-date').value = today();
+  const ad = document.getElementById('add-date');    if (ad) ad.value = today();
+  const rd = document.getElementById('refund-date'); if (rd) rd.value = today();
 }
 
 function updateClientNameField(selectId, nameId) {
   const sel = document.getElementById(selectId);
-  const c = appClients.find(c => c.id == sel?.value);
-  document.getElementById(nameId).value = c ? c.name : '';
+  if (!sel) return;
+  const c = appClients.find(c => c.id == sel.value);
+  const nameEl = document.getElementById(nameId);
+  if (nameEl) nameEl.value = c ? c.name : '';
 }
 
 function updateRefundBalance() {
   const sel = document.getElementById('refund-client');
-  const c = appClients.find(c => c.id == sel?.value);
-  document.getElementById('refund-balance').value = c ? fmt(clientBalance(c.id)) : '';
+  if (!sel) return;
+  const c = appClients.find(c => c.id == sel.value);
+  const balEl = document.getElementById('refund-balance');
+  if (balEl) balEl.value = c ? fmt(clientBalance(c.id)) : '';
 }
 
 document.getElementById('add-client')?.addEventListener('change', () => updateClientNameField('add-client','add-client-name'));
@@ -1791,12 +1795,13 @@ function renderHistory() {
 
   const tbody = document.getElementById('credit-history');
   const empty = document.getElementById('history-empty');
+  if (!tbody) return;
   if (!rows.length) {
     tbody.innerHTML = '';
-    empty.innerHTML = '<div class="empty-state"><p>Aucune opération trouvée.</p></div>';
+    if (empty) empty.innerHTML = '<div class="empty-state"><p>Aucune opération trouvée.</p></div>';
     return;
   }
-  empty.innerHTML = '';
+  if (empty) empty.innerHTML = '';
   const canEdit = can('credits.update') || can('all');
   const canDel  = can('credits.delete') || can('all');
   tbody.innerHTML = rows.map(h => {
