@@ -1062,11 +1062,13 @@ function renderCredits() {
     tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--ink3);padding:24px">Aucun crédit trouvé.</td></tr>';
     return;
   }
+  const canCancel = can('credits.delete') || can('all');
   tbody.innerHTML = rows.map(cr => {
     const total = parseFloat(cr.total_price || 0);
     const down  = parseFloat(cr.down_payment || 0);
     const rem   = parseFloat(cr.remaining || 0);
-    return `<tr>
+    const isAnnule = cr.status === 'annule';
+    return `<tr${isAnnule?' style="opacity:.55"':''}>
       <td>#${cr.id}</td>
       <td>${cr.client_name||'—'}<div class="muted" style="font-size:11px">${cr.client_phone||''}</div></td>
       <td>${cr.product_name||'—'}</td>
@@ -1076,9 +1078,28 @@ function renderCredits() {
       <td>${cr.num_installments||'—'}</td>
       <td><span class="badge badge-${cr.status}">${cr.status||'—'}</span></td>
       <td>${fmtDate(cr.next_due_date)||'—'}</td>
-      <td class="td-actions"></td>
+      <td class="td-actions">
+        <button class="btn-icon" onclick="printCreditContract(${cr.id})" title="Imprimer le contrat">🖨️</button>
+        ${canCancel && !isAnnule ? `<button class="btn-icon" onclick="cancelCredit(${cr.id})" title="Annuler le crédit" style="color:var(--danger)">✕</button>` : ''}
+      </td>
     </tr>`;
   }).join('');
+}
+
+async function cancelCredit(id) {
+  const cr = appCredits.find(c => c.id == id);
+  if (!cr) return;
+  const msg = `Annuler le crédit #${cr.id} (${cr.product_name}) de ${cr.client_name} ?\n\n` +
+              `Cette action est irréversible. Le crédit passera en statut "annulé" et n'apparaîtra plus dans les totaux ni les échéances actives.`;
+  if (!confirm(msg)) return;
+  const data = await api('/credits/' + id, { method: 'DELETE' });
+  if (!data?.success) return showToast(data?.message || 'Erreur lors de l\'annulation.');
+  await Promise.all([loadCredits(), loadEcheances()]);
+  renderCredits();
+  renderEcheances();
+  renderDashboard();
+  renderAnalysis();
+  showToast('Crédit annulé.');
 }
 
 ['cr-search','cr-filter-status','cr-filter-from','cr-filter-to'].forEach(id => {
@@ -1155,33 +1176,73 @@ function renderEcheances() {
   }).join('');
 }
 
-async function payEcheance(id) {
+// Ouvre la modal d'encaissement pré-remplie
+function payEcheance(id) {
   const e = appEcheances.find(x => x.id == id);
   if (!e) return;
   const due  = parseFloat(e.amount||0);
   const pay  = parseFloat(e.paid_amount||0);
   const rest = Math.max(0, due - pay);
-  const inp = prompt(`Montant à encaisser (reste: ${fmt(rest)}) :`, rest.toFixed(2));
-  if (inp === null) return;
-  const amount = parseFloat(inp);
-  if (!amount || amount <= 0) return showToast('Montant invalide.');
-  const method = prompt('Mode de paiement (especes / carte / virement / cheque) :', 'especes');
-  if (!method) return;
+
+  document.getElementById('pay-echeance-id').value   = e.id;
+  document.getElementById('pay-amount').value        = rest.toFixed(2);
+  document.getElementById('pay-method').value        = 'especes';
+  document.getElementById('pay-date').value          = today();
+  document.getElementById('pay-note').value          = '';
+  document.getElementById('pay-echeance-info').innerHTML =
+    `<strong>${e.client_name||''}</strong> — ${e.product_name||''}<br>` +
+    `Échéance n°${e.installment_no} due le <strong>${fmtDate(e.due_date)}</strong><br>` +
+    `Montant total : ${fmt(due)} • Déjà payé : ${fmt(pay)} • <span style="color:var(--success)">Reste : ${fmt(rest)}</span>`;
+
+  openModal('modal-pay-echeance');
+  setTimeout(() => document.getElementById('pay-amount').focus(), 100);
+}
+
+document.getElementById('pay-echeance-form')?.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const id     = +document.getElementById('pay-echeance-id').value;
+  const amount = parseFloat(document.getElementById('pay-amount').value);
+  const method = document.getElementById('pay-method').value;
+  const date   = document.getElementById('pay-date').value || today();
+  const note   = document.getElementById('pay-note').value.trim();
+
+  if (!amount || amount <= 0) return showMsg('pay-message', 'Montant invalide.', 'error');
+
   const data = await api('/echeances/' + id + '/pay', {
     method: 'PUT',
-    body: JSON.stringify({ amount, payment_method: method }),
+    body: JSON.stringify({ amount, payment_method: method, payment_date: date, note: note || null }),
   });
-  if (data?.success) {
-    await Promise.all([loadEcheances(), loadCredits()]);
-    renderEcheances();
-    renderCredits();
-    renderDashboard();
-    renderAnalysis();
-    showToast('Paiement enregistré.');
-  } else {
-    showToast(data?.message || 'Erreur lors du paiement.');
+  if (!data?.success) {
+    return showMsg('pay-message', data?.message || 'Erreur lors du paiement.', 'error');
   }
-}
+
+  // Snapshot pour le reçu (avant rechargement qui va modifier appEcheances)
+  const e = appEcheances.find(x => x.id == id);
+  const receipt = {
+    paymentDate: date,
+    paymentMethod: method,
+    amountPaid: amount,
+    note,
+    echeance: e,
+    creditId: e?.credit_id,
+    paidTotalAfter: parseFloat(data.paid_amount || 0),
+    statusAfter: data.status,
+  };
+
+  closeModal('modal-pay-echeance');
+  await Promise.all([loadEcheances(), loadCredits()]);
+  renderEcheances();
+  renderCredits();
+  renderDashboard();
+  renderAnalysis();
+
+  // Propose l'impression du reçu
+  if (confirm('Paiement enregistré.\n\nImprimer le reçu maintenant ?')) {
+    printPaymentReceipt(receipt);
+  } else {
+    showToast('Paiement enregistré.');
+  }
+});
 
 document.getElementById('ec-filter-status')?.addEventListener('change', renderEcheances);
 document.getElementById('ec-search')?.addEventListener('input', renderEcheances);
@@ -1971,6 +2032,164 @@ async function deleteUser(id) {
 //  EXPORT & PRINT
 // ══════════════════════════════════════════════
 function printHistory() { window.print(); }
+
+// ══════════════════════════════════════════════
+//  IMPRESSION : helpers communs
+// ══════════════════════════════════════════════
+function printDocStyles() {
+  return `
+    body { font-family: 'Inter', Arial, sans-serif; color:#222; padding:30px; max-width:760px; margin:0 auto; }
+    h1 { font-weight:600; margin:0 0 4px; font-size:22px; }
+    h2 { font-weight:500; margin:24px 0 8px; font-size:16px; border-bottom:1px solid #ddd; padding-bottom:4px; }
+    .header { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #333; padding-bottom:16px; margin-bottom:18px; }
+    .brand { font-size:24px; font-weight:700; }
+    .muted { color:#666; font-size:12px; }
+    .row { display:flex; justify-content:space-between; margin:4px 0; font-size:13px; }
+    .row .label { color:#666; }
+    .row .val { font-weight:500; }
+    table { width:100%; border-collapse:collapse; margin:10px 0 18px; font-size:12px; }
+    th, td { border:1px solid #ccc; padding:6px 10px; text-align:left; }
+    th { background:#f0ece4; font-weight:600; }
+    .total-line { display:flex; justify-content:space-between; padding:10px 14px; background:#f8f6f1; border-radius:6px; font-weight:600; margin-top:10px; }
+    .signatures { display:flex; justify-content:space-between; margin-top:60px; }
+    .sig { width:40%; text-align:center; }
+    .sig .line { border-top:1px solid #333; padding-top:6px; font-size:11px; color:#666; }
+    .stamp { color:#888; font-size:11px; margin-top:30px; text-align:right; }
+    @media print { body { padding:10px; } .no-print { display:none } }
+  `;
+}
+
+function printDocHeader(title) {
+  const s = appSettings || {};
+  const company = s.companyName || 'lexpert';
+  const addr    = s.address || '';
+  const phones  = [s.phone1, s.phone2].filter(Boolean).join(' / ');
+  return `
+    <div class="header">
+      <div>
+        <div class="brand">${company}</div>
+        <div class="muted">${addr}${phones ? ' • ' + phones : ''}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:18px;font-weight:600">${title}</div>
+        <div class="muted">${new Date().toLocaleString('fr-FR')}</div>
+      </div>
+    </div>`;
+}
+
+function openPrintWindow(title, bodyHtml) {
+  const w = window.open('', '_blank', 'width=820,height=900');
+  if (!w) return showToast('Le navigateur a bloqué la fenêtre d\'impression.');
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>${printDocStyles()}</style></head><body>${bodyHtml}<script>window.onload=()=>setTimeout(()=>window.print(),250)<\/script></body></html>`);
+  w.document.close();
+}
+
+// ══════════════════════════════════════════════
+//  IMPRESSION : Reçu de paiement
+// ══════════════════════════════════════════════
+function printPaymentReceipt(r) {
+  const e = r.echeance || {};
+  const due = parseFloat(e.amount||0);
+  const restAfter = Math.max(0, due - r.paidTotalAfter);
+  const cr = appCredits.find(c => c.id == r.creditId);
+  const totalRest = cr ? parseFloat(cr.remaining || 0) : 0;
+  const methodLabels = { especes: 'Espèces', carte: 'Carte bancaire', virement: 'Virement', cheque: 'Chèque' };
+
+  const body = `
+    ${printDocHeader('REÇU DE PAIEMENT')}
+    <h2>Client</h2>
+    <div class="row"><span class="label">Nom</span><span class="val">${e.client_name||'—'}</span></div>
+    <div class="row"><span class="label">Téléphone</span><span class="val">${e.client_phone||'—'}</span></div>
+    <div class="row"><span class="label">N° client</span><span class="val">#${String(e.client_display_id||'').padStart(3,'0')}</span></div>
+
+    <h2>Crédit</h2>
+    <div class="row"><span class="label">Produit</span><span class="val">${e.product_name||'—'}</span></div>
+    <div class="row"><span class="label">N° crédit</span><span class="val">#${r.creditId||'—'}</span></div>
+    <div class="row"><span class="label">Échéance</span><span class="val">N° ${e.installment_no||''} due le ${fmtDate(e.due_date)}</span></div>
+
+    <h2>Paiement</h2>
+    <div class="row"><span class="label">Date du paiement</span><span class="val">${fmtDate(r.paymentDate)}</span></div>
+    <div class="row"><span class="label">Mode</span><span class="val">${methodLabels[r.paymentMethod]||r.paymentMethod}</span></div>
+    ${r.note ? `<div class="row"><span class="label">Note</span><span class="val">${r.note}</span></div>` : ''}
+
+    <div class="total-line"><span>Montant encaissé</span><span>${fmt(r.amountPaid)}</span></div>
+    <div class="row" style="margin-top:8px"><span class="label">Reste sur cette échéance</span><span class="val">${fmt(restAfter)}</span></div>
+    <div class="row"><span class="label">Reste total du crédit</span><span class="val">${fmt(totalRest)}</span></div>
+
+    <div class="signatures">
+      <div class="sig"><div class="line">Signature client</div></div>
+      <div class="sig"><div class="line">Cachet et signature ${(appSettings?.companyName)||'lexpert'}</div></div>
+    </div>
+
+    <div class="stamp">Reçu n° ${r.creditId}-${e.installment_no}-${Date.now().toString(36)} • Document non comptable</div>
+  `;
+  openPrintWindow('Reçu de paiement', body);
+}
+
+// ══════════════════════════════════════════════
+//  IMPRESSION : Contrat de crédit + échéancier
+// ══════════════════════════════════════════════
+async function printCreditContract(creditId) {
+  // Récupère détail + échéances de ce crédit
+  const data = await api('/credits/' + creditId);
+  if (!data?.success) return showToast('Impossible de charger le crédit.');
+  const cr = data.credit;
+  const ech = data.echeances || [];
+  const methodLabels = { especes: 'Espèces', carte: 'Carte', virement: 'Virement', cheque: 'Chèque' };
+
+  const echRows = ech.map(e => {
+    const stLabel = e.status === 'payee' ? '✅ Payée'
+      : e.status === 'partielle' ? '🟡 Partielle'
+      : e.status === 'retard' ? '⚠️ Retard'
+      : 'À payer';
+    return `<tr>
+      <td>${e.installment_no}</td>
+      <td>${fmtDate(e.due_date)}</td>
+      <td>${fmt(parseFloat(e.amount))}</td>
+      <td>${fmt(parseFloat(e.paid_amount||0))}</td>
+      <td>${fmtDate(e.paid_at)||'—'}</td>
+      <td>${stLabel}</td>
+    </tr>`;
+  }).join('');
+
+  const body = `
+    ${printDocHeader('CONTRAT DE CRÉDIT')}
+    <div class="row"><span class="label">N° contrat</span><span class="val">CR-${String(cr.id).padStart(5,'0')}</span></div>
+    <div class="row"><span class="label">Date d'établissement</span><span class="val">${fmtDate(cr.created_at)}</span></div>
+
+    <h2>Acheteur</h2>
+    <div class="row"><span class="label">Nom complet</span><span class="val">${cr.client_name||'—'}</span></div>
+    <div class="row"><span class="label">N° client</span><span class="val">#${String(cr.client_display_id||'').padStart(3,'0')}</span></div>
+    <div class="row"><span class="label">Téléphone</span><span class="val">${cr.phone||'—'}</span></div>
+    ${cr.cin ? `<div class="row"><span class="label">CIN</span><span class="val">${cr.cin}</span></div>` : ''}
+    ${cr.address ? `<div class="row"><span class="label">Adresse</span><span class="val">${cr.address}${cr.city?', '+cr.city:''}</span></div>` : ''}
+
+    <h2>Produit et conditions financières</h2>
+    <div class="row"><span class="label">Produit acheté</span><span class="val">${cr.product_name||'—'}</span></div>
+    <div class="row"><span class="label">Prix total</span><span class="val">${fmt(parseFloat(cr.total_price))}</span></div>
+    <div class="row"><span class="label">Avance versée</span><span class="val">${fmt(parseFloat(cr.down_payment))}</span></div>
+    <div class="row"><span class="label">Montant à crédit</span><span class="val">${fmt(parseFloat(cr.total_price)-parseFloat(cr.down_payment))}</span></div>
+    <div class="row"><span class="label">Nombre d'échéances</span><span class="val">${cr.num_installments} mensualités</span></div>
+    <div class="row"><span class="label">Mensualité</span><span class="val">${fmt(parseFloat(cr.installment_amount))}</span></div>
+    <div class="row"><span class="label">Date de début</span><span class="val">${fmtDate(cr.start_date)}</span></div>
+    ${cr.note ? `<div class="row"><span class="label">Observation</span><span class="val">${cr.note}</span></div>` : ''}
+
+    <h2>Échéancier</h2>
+    <table>
+      <thead><tr><th>N°</th><th>Date due</th><th>Montant</th><th>Payé</th><th>Date paiement</th><th>Statut</th></tr></thead>
+      <tbody>${echRows}</tbody>
+    </table>
+    <div class="total-line"><span>Reste à payer</span><span>${fmt(parseFloat(cr.remaining))}</span></div>
+
+    <p class="muted" style="margin-top:18px">Le client s'engage à régler les mensualités aux dates indiquées ci-dessus. Tout retard de paiement supérieur à 7 jours pourra entraîner la résiliation du crédit.</p>
+
+    <div class="signatures">
+      <div class="sig"><div class="line">Signature de l'acheteur</div></div>
+      <div class="sig"><div class="line">Cachet et signature ${(appSettings?.companyName)||'lexpert'}</div></div>
+    </div>
+  `;
+  openPrintWindow('Contrat crédit #' + cr.id, body);
+}
 
 function exportCSV() {
   const rows = [['Date','N° Client','Client','Type','Mode','Montant','Note','Opérateur']];
