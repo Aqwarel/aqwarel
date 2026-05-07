@@ -2127,12 +2127,25 @@ document.getElementById('modal-scanner').addEventListener('click', e => {
 });
 
 // ── Bouton scan dans "Ajouter un crédit" → sélectionne le client
-document.getElementById('btn-scan-add-client').addEventListener('click', () => {
+document.getElementById('btn-scan-add-client')?.addEventListener('click', () => {
   scanClientIntoSelect('add-client', 'add-message');
 });
 
+// ── Bouton scan dans "Nouveau crédit" (form principal) → remplit cr-client-search
+document.getElementById('btn-scan-cr-client')?.addEventListener('click', () => {
+  openScanner((raw) => {
+    const displayId = parseClientQrPayload(raw);
+    if (displayId == null) return showMsg('cr-message', 'QR invalide : "' + raw + '"', 'error');
+    const c = findClientByDisplayId(displayId);
+    if (!c) return showMsg('cr-message', 'Client #' + displayId + ' introuvable.', 'error');
+    document.getElementById('cr-client-search').value = clientLabel(c);
+    document.getElementById('cr-client').value = c.id;
+    showMsg('cr-message', 'Client : ' + c.name, 'success');
+  });
+});
+
 // ── Bouton scan dans "Ajouter un client" → vérifie l'existant
-document.getElementById('btn-scan-existing-client').addEventListener('click', () => {
+document.getElementById('btn-scan-existing-client')?.addEventListener('click', () => {
   openScanner((raw) => {
     const displayId = parseClientQrPayload(raw);
     if (displayId == null) {
