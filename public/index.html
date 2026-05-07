@@ -672,6 +672,66 @@ td { padding: 11px 16px; font-size: 13px; color: var(--ink); vertical-align: mid
   </div>
 </div>
 
+<!-- MODAL : Modifier un crédit -->
+<div class="modal-overlay" id="modal-edit-credit">
+  <div class="modal-box">
+    <h3>Modifier le crédit <button class="modal-close" data-close="modal-edit-credit">×</button></h3>
+    <form id="edit-credit-form">
+      <input type="hidden" id="edit-cr-id" />
+      <div id="edit-cr-info" class="muted" style="margin-bottom:12px"></div>
+      <label>Produit acheté <input type="text" id="edit-cr-product" required /></label>
+      <label>Statut
+        <select id="edit-cr-status">
+          <option value="en_cours">En cours</option>
+          <option value="paye">Payé</option>
+          <option value="retard">En retard</option>
+          <option value="annule">Annulé</option>
+        </select>
+      </label>
+      <label>Note <textarea id="edit-cr-note" rows="2"></textarea></label>
+      <div class="modal-actions">
+        <button type="submit" class="btn btn-primary">Enregistrer</button>
+        <button type="button" class="btn btn-secondary" data-close="modal-edit-credit">Annuler</button>
+      </div>
+      <div id="edit-cr-message" class="message"></div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL : Modifier une échéance -->
+<div class="modal-overlay" id="modal-edit-echeance">
+  <div class="modal-box">
+    <h3>Modifier l'échéance <button class="modal-close" data-close="modal-edit-echeance">×</button></h3>
+    <form id="edit-echeance-form">
+      <input type="hidden" id="edit-ec-id" />
+      <div id="edit-ec-info" class="muted" style="margin-bottom:12px"></div>
+      <div class="inline-grid">
+        <label>Date d'échéance <input type="date" id="edit-ec-due" required /></label>
+        <label>Montant dû (MAD) <input type="number" id="edit-ec-amount" step="0.01" min="0.01" required /></label>
+      </div>
+      <div class="inline-grid">
+        <label>Montant payé (MAD) <input type="number" id="edit-ec-paid" step="0.01" min="0" /></label>
+        <label>Date de paiement <input type="date" id="edit-ec-paid-date" /></label>
+      </div>
+      <label>Mode de paiement
+        <select id="edit-ec-method">
+          <option value="">— aucun —</option>
+          <option value="especes">Espèces</option>
+          <option value="carte">Carte</option>
+          <option value="virement">Virement</option>
+          <option value="cheque">Chèque</option>
+        </select>
+      </label>
+      <label>Note <textarea id="edit-ec-note" rows="2"></textarea></label>
+      <div class="modal-actions">
+        <button type="submit" class="btn btn-primary">Enregistrer</button>
+        <button type="button" class="btn btn-secondary" data-close="modal-edit-echeance">Annuler</button>
+      </div>
+      <div id="edit-ec-message" class="message"></div>
+    </form>
+  </div>
+</div>
+
 <!-- MODAL : Scanner QR client -->
 <div class="modal-overlay" id="modal-scanner">
   <div class="modal-box">
@@ -1062,7 +1122,8 @@ function renderCredits() {
     tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--ink3);padding:24px">Aucun crédit trouvé.</td></tr>';
     return;
   }
-  const canCancel = can('credits.delete') || can('all');
+  const canEdit   = can('credits.update') || can('all');
+  const canDelete = can('credits.delete') || can('all');
   tbody.innerHTML = rows.map(cr => {
     const total = parseFloat(cr.total_price || 0);
     const down  = parseFloat(cr.down_payment || 0);
@@ -1080,26 +1141,62 @@ function renderCredits() {
       <td>${fmtDate(cr.next_due_date)||'—'}</td>
       <td class="td-actions">
         <button class="btn-icon" onclick="printCreditContract(${cr.id})" title="Imprimer le contrat">🖨️</button>
-        ${canCancel && !isAnnule ? `<button class="btn-icon" onclick="cancelCredit(${cr.id})" title="Annuler le crédit" style="color:var(--danger)">✕</button>` : ''}
+        ${canEdit   ? `<button class="btn-icon" onclick="editCredit(${cr.id})" title="Modifier">✎</button>` : ''}
+        ${canDelete ? `<button class="btn-icon" onclick="deleteCredit(${cr.id})" title="Supprimer définitivement" style="color:var(--danger)">✕</button>` : ''}
       </td>
     </tr>`;
   }).join('');
 }
 
-async function cancelCredit(id) {
+function editCredit(id) {
   const cr = appCredits.find(c => c.id == id);
   if (!cr) return;
-  const msg = `Annuler le crédit #${cr.id} (${cr.product_name}) de ${cr.client_name} ?\n\n` +
-              `Cette action est irréversible. Le crédit passera en statut "annulé" et n'apparaîtra plus dans les totaux ni les échéances actives.`;
-  if (!confirm(msg)) return;
-  const data = await api('/credits/' + id, { method: 'DELETE' });
-  if (!data?.success) return showToast(data?.message || 'Erreur lors de l\'annulation.');
+  document.getElementById('edit-cr-id').value      = cr.id;
+  document.getElementById('edit-cr-product').value = cr.product_name || '';
+  document.getElementById('edit-cr-status').value  = cr.status || 'en_cours';
+  document.getElementById('edit-cr-note').value    = cr.note || '';
+  document.getElementById('edit-cr-info').innerHTML =
+    `Crédit #${cr.id} — <strong>${cr.client_name||''}</strong> • Total ${fmt(parseFloat(cr.total_price))} • Reste ${fmt(parseFloat(cr.remaining))}`;
+  openModal('modal-edit-credit');
+}
+
+document.getElementById('edit-credit-form')?.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const id = +document.getElementById('edit-cr-id').value;
+  const data = await api('/credits/' + id, {
+    method: 'PUT',
+    body: JSON.stringify({
+      product_name: document.getElementById('edit-cr-product').value.trim(),
+      status:       document.getElementById('edit-cr-status').value,
+      note:         document.getElementById('edit-cr-note').value.trim() || null,
+    }),
+  });
+  if (!data?.success) return showMsg('edit-cr-message', data?.message || 'Erreur.', 'error');
+  closeModal('modal-edit-credit');
   await Promise.all([loadCredits(), loadEcheances()]);
   renderCredits();
   renderEcheances();
   renderDashboard();
   renderAnalysis();
-  showToast('Crédit annulé.');
+  showToast('Crédit modifié.');
+});
+
+async function deleteCredit(id) {
+  const cr = appCredits.find(c => c.id == id);
+  if (!cr) return;
+  const msg = `SUPPRIMER DÉFINITIVEMENT le crédit #${cr.id} (${cr.product_name}) de ${cr.client_name} ?\n\n` +
+              `⚠️ Cette action est IRRÉVERSIBLE. Le crédit ET ses échéances seront supprimés de la base. ` +
+              `Les paiements déjà enregistrés gardent une trace mais perdent le lien vers l'échéance.\n\n` +
+              `Pour confirmer, cliquez sur OK.`;
+  if (!confirm(msg)) return;
+  const data = await api('/credits/' + id, { method: 'DELETE' });
+  if (!data?.success) return showToast(data?.message || 'Erreur lors de la suppression.');
+  await Promise.all([loadCredits(), loadEcheances()]);
+  renderCredits();
+  renderEcheances();
+  renderDashboard();
+  renderAnalysis();
+  showToast('Crédit supprimé.');
 }
 
 ['cr-search','cr-filter-status','cr-filter-from','cr-filter-to'].forEach(id => {
@@ -1152,7 +1249,9 @@ function renderEcheances() {
     tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--ink3);padding:24px">Aucune échéance trouvée.</td></tr>';
     return;
   }
-  const canPay = can('credits.create');
+  const canPay    = can('credits.create');
+  const canEdit   = can('credits.update') || can('all');
+  const canDelete = can('credits.delete') || can('all');
   tbody.innerHTML = rows.map(e => {
     const due  = parseFloat(e.amount||0);
     const pay  = parseFloat(e.paid_amount||0);
@@ -1171,9 +1270,73 @@ function renderEcheances() {
       <td>${fmtDate(e.paid_at)||'—'}</td>
       <td class="td-actions">
         ${canPay && e.status !== 'payee' ? `<button class="btn btn-sm btn-primary" onclick="payEcheance(${e.id})">Encaisser</button>` : ''}
+        ${canEdit   ? `<button class="btn-icon" onclick="editEcheance(${e.id})" title="Modifier">✎</button>` : ''}
+        ${canDelete ? `<button class="btn-icon" onclick="deleteEcheance(${e.id})" title="Supprimer" style="color:var(--danger)">✕</button>` : ''}
       </td>
     </tr>`;
   }).join('');
+}
+
+function editEcheance(id) {
+  const e = appEcheances.find(x => x.id == id);
+  if (!e) return;
+  document.getElementById('edit-ec-id').value        = e.id;
+  document.getElementById('edit-ec-due').value       = (e.due_date||'').slice(0,10);
+  document.getElementById('edit-ec-amount').value    = parseFloat(e.amount||0).toFixed(2);
+  document.getElementById('edit-ec-paid').value      = parseFloat(e.paid_amount||0).toFixed(2);
+  document.getElementById('edit-ec-paid-date').value = (e.paid_at||'').slice(0,10);
+  document.getElementById('edit-ec-method').value    = e.payment_method_label
+    ? ({'Especes':'especes','Carte bancaire':'carte','Virement bancaire':'virement','Cheque':'cheque'}[e.payment_method_label] || '')
+    : '';
+  document.getElementById('edit-ec-note').value      = e.note || '';
+  document.getElementById('edit-ec-info').innerHTML  =
+    `<strong>${e.client_name||''}</strong> — ${e.product_name||''} • Échéance n°${e.installment_no}`;
+  openModal('modal-edit-echeance');
+}
+
+document.getElementById('edit-echeance-form')?.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const id = +document.getElementById('edit-ec-id').value;
+  const body = {
+    due_date:       document.getElementById('edit-ec-due').value || null,
+    amount:         parseFloat(document.getElementById('edit-ec-amount').value),
+    paid_amount:    parseFloat(document.getElementById('edit-ec-paid').value || '0'),
+    note:           document.getElementById('edit-ec-note').value.trim() || null,
+  };
+  const method = document.getElementById('edit-ec-method').value;
+  if (method) body.payment_method = method;
+  const pd = document.getElementById('edit-ec-paid-date').value;
+  if (pd) body.payment_date = pd;
+
+  const data = await api('/echeances/' + id, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+  if (!data?.success) return showMsg('edit-ec-message', data?.message || 'Erreur.', 'error');
+  closeModal('modal-edit-echeance');
+  await Promise.all([loadEcheances(), loadCredits()]);
+  renderEcheances();
+  renderCredits();
+  renderDashboard();
+  renderAnalysis();
+  showToast('Échéance modifiée.');
+});
+
+async function deleteEcheance(id) {
+  const e = appEcheances.find(x => x.id == id);
+  if (!e) return;
+  const msg = `SUPPRIMER l'échéance n°${e.installment_no} du crédit #${e.credit_id} (${e.product_name}) ?\n\n` +
+              `⚠️ Cette action est IRRÉVERSIBLE. Le montant restant du crédit sera recalculé.\n\n` +
+              `OK pour confirmer.`;
+  if (!confirm(msg)) return;
+  const data = await api('/echeances/' + id, { method: 'DELETE' });
+  if (!data?.success) return showToast(data?.message || 'Erreur lors de la suppression.');
+  await Promise.all([loadEcheances(), loadCredits()]);
+  renderEcheances();
+  renderCredits();
+  renderDashboard();
+  renderAnalysis();
+  showToast('Échéance supprimée.');
 }
 
 // Ouvre la modal d'encaissement pré-remplie

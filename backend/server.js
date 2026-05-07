@@ -395,12 +395,14 @@ app.put('/api/credits/:id', authOptional, async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
-// DELETE /api/credits/:id — annulation (soft)
+// DELETE /api/credits/:id — suppression définitive
+// Les échéances liées sont supprimées en cascade (FK ON DELETE CASCADE).
+// Les paiements gardent une trace mais leur echeance_id devient NULL.
 app.delete('/api/credits/:id', authOptional, async (req, res) => {
   try {
     const id  = +req.params.id;
-    const aff = await db.update('credits', { status: 'annule' }, 'id=?', [id]);
-    if (!aff) return res.status(404).json({ success: false, message: 'Crédit introuvable.' });
+    const [r] = await db.pool.execute('DELETE FROM credits WHERE id = ?', [id]);
+    if (!r.affectedRows) return res.status(404).json({ success: false, message: 'Crédit introuvable.' });
     res.json({ success: true });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
@@ -489,6 +491,83 @@ app.put('/api/echeances/:id/pay', authOptional, async (req, res) => {
     if (e.message === 'NOT_FOUND')      return res.status(404).json({ success: false, message: 'Échéance introuvable.' });
     if (e.message === 'ALREADY_PAID')   return res.status(400).json({ success: false, message: 'Échéance déjà payée.' });
     if (e.message === 'INVALID_AMOUNT') return res.status(400).json({ success: false, message: 'Montant invalide.' });
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+// PUT /api/echeances/:id — modifier les champs de base (date, montant, paid_amount, note)
+// Recalcule automatiquement le statut de l'échéance et le remaining du crédit parent.
+app.put('/api/echeances/:id', authOptional, async (req, res) => {
+  try {
+    const id = +req.params.id;
+    const { due_date, amount, paid_amount, note, payment_method, payment_date } = req.body;
+
+    await db.transaction(async (conn) => {
+      const [[e]] = await conn.execute('SELECT * FROM echeances WHERE id = ? FOR UPDATE', [id]);
+      if (!e) throw new Error('NOT_FOUND');
+
+      const newAmount     = amount      !== undefined ? parseFloat(amount)      : parseFloat(e.amount);
+      const newPaid       = paid_amount !== undefined ? parseFloat(paid_amount) : parseFloat(e.paid_amount || 0);
+      if (newAmount <= 0)   throw new Error('INVALID_AMOUNT');
+      if (newPaid < 0)      throw new Error('INVALID_PAID');
+
+      // Recalcul du statut depuis les nouvelles valeurs
+      let newStatus;
+      if (newPaid + 0.005 >= newAmount && newPaid > 0)      newStatus = 'payee';
+      else if (newPaid > 0)                                   newStatus = 'partielle';
+      else if (due_date && due_date < new Date().toISOString().slice(0,10))
+                                                              newStatus = 'retard';
+      else                                                    newStatus = 'a_payer';
+
+      const pmId = payment_method !== undefined ? await resolvePaymentMethodId(payment_method) : e.payment_method_id;
+
+      await conn.execute(
+        `UPDATE echeances
+         SET due_date = COALESCE(?, due_date),
+             amount = ?,
+             paid_amount = ?,
+             status = ?,
+             paid_at = ?,
+             payment_method_id = ?,
+             note = COALESCE(?, note)
+         WHERE id = ?`,
+        [
+          due_date || null,
+          newAmount,
+          newPaid,
+          newStatus,
+          newStatus === 'payee' ? (payment_date ? new Date(payment_date) : (e.paid_at || new Date())) : null,
+          pmId,
+          note !== undefined ? (note || null) : null,
+          id,
+        ]
+      );
+
+      await refreshCreditStatus(conn, e.credit_id);
+    });
+
+    res.json({ success: true });
+  } catch (e) {
+    if (e.message === 'NOT_FOUND')        return res.status(404).json({ success: false, message: 'Échéance introuvable.' });
+    if (e.message === 'INVALID_AMOUNT')   return res.status(400).json({ success: false, message: 'Montant invalide.' });
+    if (e.message === 'INVALID_PAID')     return res.status(400).json({ success: false, message: 'Montant payé invalide.' });
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+// DELETE /api/echeances/:id — supprime une échéance et recalcule le crédit parent
+app.delete('/api/echeances/:id', authOptional, async (req, res) => {
+  try {
+    const id = +req.params.id;
+    await db.transaction(async (conn) => {
+      const [[e]] = await conn.execute('SELECT credit_id FROM echeances WHERE id = ?', [id]);
+      if (!e) throw new Error('NOT_FOUND');
+      await conn.execute('DELETE FROM echeances WHERE id = ?', [id]);
+      await refreshCreditStatus(conn, e.credit_id);
+    });
+    res.json({ success: true });
+  } catch (e) {
+    if (e.message === 'NOT_FOUND') return res.status(404).json({ success: false, message: 'Échéance introuvable.' });
     res.status(500).json({ success: false, message: e.message });
   }
 });
