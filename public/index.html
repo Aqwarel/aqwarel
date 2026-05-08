@@ -1045,11 +1045,18 @@ async function loadClients() {
   const data = await api('/clients');
   if (data?.success) {
     appClients = data.clients.map(c => ({
-      id:        c.id,
-      displayId: c.display_id ?? c.id,
-      name:      (c.first_name + ' ' + (c.last_name||'')).trim(),
-      email:     c.email||'',
-      tel:       c.phone||'',
+      id:           c.id,
+      displayId:    c.display_id ?? c.id,
+      name:         (c.first_name + ' ' + (c.last_name||'')).trim(),
+      email:        c.email||'',
+      tel:          c.phone||'',
+      cin:          c.cin||'',
+      address:      c.address||'',
+      city:         c.city||'',
+      notes:        c.notes||'',
+      creditsCount: parseInt(c.credits_count||0, 10),
+      totalToPay:   parseFloat(c.total_to_pay||0),
+      totalPaid:    parseFloat(c.total_paid_open||0),
     }));
   }
 }
@@ -1950,8 +1957,12 @@ document.getElementById('client-form').addEventListener('submit', async e => {
     body: JSON.stringify({
       first_name: firstName,
       last_name:  lastName,
-      email: document.getElementById('client-email').value.trim() || null,
-      phone: document.getElementById('client-telephone').value.trim() || null,
+      email:      document.getElementById('client-email').value.trim() || null,
+      phone:      document.getElementById('client-telephone').value.trim() || null,
+      cin:        document.getElementById('client-cin').value.trim() || null,
+      address:    document.getElementById('client-address').value.trim() || null,
+      city:       document.getElementById('client-city').value.trim() || null,
+      notes:      document.getElementById('client-notes').value.trim() || null,
     }),
   });
 
@@ -1969,21 +1980,32 @@ document.getElementById('client-form').addEventListener('submit', async e => {
 function renderClientList() {
   const tbody = document.getElementById('client-list');
   if (!tbody) return;
-  if (!appClients.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--ink3);padding:32px">Aucun client enregistré.</td></tr>';
+  const search = (document.getElementById('client-search')?.value || '').trim().toLowerCase();
+  let rows = appClients;
+  if (search) {
+    rows = rows.filter(c => [c.name, c.tel, c.cin, c.email, c.city,
+      '#'+String(c.displayId).padStart(3,'0')].filter(Boolean).join(' ').toLowerCase().includes(search));
+  }
+  const countEl = document.getElementById('clients-count');
+  if (countEl) countEl.textContent = rows.length + (rows.length>1?' clients':' client');
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--ink3);padding:32px">Aucun client enregistré.</td></tr>';
     return;
   }
-  tbody.innerHTML = appClients.map(c => {
-    const bal = clientBalance(c.id);
-    const cls = bal>0 ? 'solde-pos' : bal<0 ? 'solde-neg' : 'solde-zero';
-    const canEdit = can('clients.update');
-    const canDel  = can('clients.delete') || can('all');
+  const canEdit = can('clients.update') || can('all');
+  const canDel  = can('clients.delete') || can('all');
+  tbody.innerHTML = rows.map(c => {
+    const remaining = Math.max(0, (c.totalToPay||0) - (c.totalPaid||0));
+    const cls = remaining > 0 ? 'solde-pos' : 'solde-zero';
     return `<tr>
       <td>#${String(c.displayId ?? c.id).padStart(3,'0')}</td>
-      <td>${c.name}</td>
-      <td>${c.email||'—'}</td>
+      <td>${c.name}<div class="muted" style="font-size:11px">${c.email||''}</div></td>
       <td>${c.tel||'—'}</td>
-      <td class="${cls}">${fmt(bal)}</td>
+      <td>${c.cin||'—'}</td>
+      <td>${c.city||'—'}</td>
+      <td style="text-align:center">${c.creditsCount||0}</td>
+      <td class="${cls}" style="font-weight:600">${fmt(remaining)}</td>
       <td class="td-actions">
         <button class="btn-icon" onclick="openClientQr(${c.id})" title="Voir le QR code"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM20 14h1v1h-1zM14 20h1v1h-1zM20 20h1v1h-1zM17 17h3v3h-3z"/></svg></button>
         ${canEdit ? `<button class="btn-icon" onclick="openEditClient(${c.id})" title="Modifier"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>` : ''}
@@ -1993,6 +2015,9 @@ function renderClientList() {
   }).join('');
 }
 
+// Recherche live dans la liste des clients
+document.getElementById('client-search')?.addEventListener('input', renderClientList);
+
 function openEditClient(id) {
   const c = appClients.find(c => c.id==id);
   if (!c) return;
@@ -2000,6 +2025,10 @@ function openEditClient(id) {
   document.getElementById('edit-client-name').value      = c.name;
   document.getElementById('edit-client-email').value     = c.email||'';
   document.getElementById('edit-client-telephone').value = c.tel||'';
+  document.getElementById('edit-client-cin').value       = c.cin||'';
+  document.getElementById('edit-client-address').value   = c.address||'';
+  document.getElementById('edit-client-city').value      = c.city||'';
+  document.getElementById('edit-client-notes').value     = c.notes||'';
   openModal('modal-edit-client');
 }
 
@@ -2028,8 +2057,12 @@ document.getElementById('edit-client-form').addEventListener('submit', async e =
     body: JSON.stringify({
       first_name: parts[0],
       last_name:  parts.slice(1).join(' ') || null,
-      email: document.getElementById('edit-client-email').value.trim() || null,
-      phone: document.getElementById('edit-client-telephone').value.trim() || null,
+      email:      document.getElementById('edit-client-email').value.trim() || null,
+      phone:      document.getElementById('edit-client-telephone').value.trim() || null,
+      cin:        document.getElementById('edit-client-cin').value.trim() || null,
+      address:    document.getElementById('edit-client-address').value.trim() || null,
+      city:       document.getElementById('edit-client-city').value.trim() || null,
+      notes:      document.getElementById('edit-client-notes').value.trim() || null,
     }),
   });
   if (data?.success) {
