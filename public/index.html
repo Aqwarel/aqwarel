@@ -7,6 +7,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/fr.js"></script>
 <style>
 :root {
   --bg:           #f4f1eb;
@@ -1281,10 +1284,10 @@ function editEcheance(id) {
   const e = appEcheances.find(x => x.id == id);
   if (!e) return;
   document.getElementById('edit-ec-id').value        = e.id;
-  document.getElementById('edit-ec-due').value       = (e.due_date||'').slice(0,10);
+  setDateInputValue('edit-ec-due', (e.due_date||'').slice(0,10));
   document.getElementById('edit-ec-amount').value    = parseFloat(e.amount||0).toFixed(2);
   document.getElementById('edit-ec-paid').value      = parseFloat(e.paid_amount||0).toFixed(2);
-  document.getElementById('edit-ec-paid-date').value = (e.paid_at||'').slice(0,10);
+  setDateInputValue('edit-ec-paid-date', (e.paid_at||'').slice(0,10));
   document.getElementById('edit-ec-method').value    = e.payment_method_label
     ? ({'Especes':'especes','Carte bancaire':'carte','Virement bancaire':'virement','Cheque':'cheque'}[e.payment_method_label] || '')
     : '';
@@ -1350,7 +1353,7 @@ function payEcheance(id) {
   document.getElementById('pay-echeance-id').value   = e.id;
   document.getElementById('pay-amount').value        = rest.toFixed(2);
   document.getElementById('pay-method').value        = 'especes';
-  document.getElementById('pay-date').value          = today();
+  setDateInputValue('pay-date', today());
   document.getElementById('pay-note').value          = '';
   document.getElementById('pay-echeance-info').innerHTML =
     `<strong>${e.client_name||''}</strong> — ${e.product_name||''}<br>` +
@@ -1441,6 +1444,30 @@ function fmt(n) {
   return Number(n).toLocaleString('fr-MA', { minimumFractionDigits:2, maximumFractionDigits:2 }) + ' MAD';
 }
 function today() { return new Date().toISOString().slice(0,10); }
+
+// Helper qui définit la valeur d'un input date en respectant flatpickr s'il est attaché
+function setDateInputValue(id, isoDate) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (el._flatpickr) el._flatpickr.setDate(isoDate || null, false);
+  else el.value = isoDate || '';
+}
+
+// Initialise flatpickr sur tous les inputs date — affiche dd/mm/yy mais
+// stocke la valeur en ISO YYYY-MM-DD pour rester compatible avec le backend
+function initDatePickers() {
+  if (!window.flatpickr) return;
+  document.querySelectorAll('input[type="date"]').forEach(el => {
+    if (el._flatpickr) return; // déjà attaché
+    flatpickr(el, {
+      locale: 'fr',
+      dateFormat: 'Y-m-d',
+      altInput: true,
+      altFormat: 'd/m/y',
+      allowInput: true,
+    });
+  });
+}
 function fmtDate(d) {
   if (!d) return '';
   const s = String(d).slice(0,10);
@@ -1484,7 +1511,7 @@ function switchTab(tab) {
     populateCreditClientSearch();
     renderCredits();
     const cs = document.getElementById('cr-start');
-    if (cs && !cs.value) cs.value = today();
+    if (cs && !cs.value) setDateInputValue('cr-start', today());
   }
   if (tab==='echeances') renderEcheances();
   if (tab==='payments')  { populateClientSelects(); refreshPaymentsSelects(); }
@@ -1508,12 +1535,23 @@ document.addEventListener('click', e => {
 // ══════════════════════════════════════════════
 //  DASHBOARD
 // ══════════════════════════════════════════════
+// Un crédit est "en retard" si son statut DB est 'retard' OU si sa
+// prochaine échéance est dans le passé (le statut DB n'est rafraîchi
+// qu'au paiement, donc on calcule aussi côté front pour rester juste).
+function isCreditLate(cr, todayStr) {
+  if (cr.status === 'annule' || cr.status === 'paye') return false;
+  if (cr.status === 'retard') return true;
+  const nd = (cr.next_due_date || '').slice(0,10);
+  return !!nd && nd < todayStr;
+}
+
 function creditTotals() {
   const live = appCredits.filter(cr => cr.status !== 'annule');
+  const today = new Date().toISOString().slice(0,10);
   const total     = live.reduce((s,cr) => s + parseFloat(cr.total_price||0), 0);
   const remaining = live.reduce((s,cr) => s + parseFloat(cr.remaining||0),   0);
   const paid      = total - remaining;
-  const lateCount = live.filter(cr => cr.status === 'retard').length;
+  const lateCount = live.filter(cr => isCreditLate(cr, today)).length;
   const activeCount = live.filter(cr => cr.status === 'en_cours' || cr.status === 'retard').length;
   return { total, paid, remaining, lateCount, activeCount };
 }
@@ -1541,7 +1579,7 @@ function renderDashboard() {
         </tr>`).join('');
   }
 
-  const lateCredits = appCredits.filter(cr => cr.status === 'retard');
+  const lateCredits = appCredits.filter(cr => isCreditLate(cr, today));
   const lateTbody = document.getElementById('db-late');
   if (lateTbody) {
     set('db-late-count', String(lateCredits.length));
@@ -1748,7 +1786,7 @@ document.getElementById('credit-add-form')?.addEventListener('submit', async e =
     document.getElementById('cr-client').value = '';
     document.getElementById('cr-down').value = 0;
     document.getElementById('cr-num').value = 6;
-    document.getElementById('cr-start').value = today();
+    setDateInputValue('cr-start', today());
     await Promise.all([loadCredits(), loadEcheances()]);
     renderCredits();
     renderEcheances();
@@ -2561,6 +2599,9 @@ document.getElementById('btn-scan-existing-client')?.addEventListener('click', (
 //  INIT
 // ══════════════════════════════════════════════
 (async function init() {
+  // Init flatpickr sur tous les inputs date avant tout
+  initDatePickers();
+
   // Apply saved brand immediately
   const saved = LS.get('settings', null);
   if (saved?.companyName) {
