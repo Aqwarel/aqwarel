@@ -2,8 +2,20 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>lexpert — Gestion des Crédits Clients</title>
+<!-- PWA -->
+<link rel="manifest" href="/manifest.webmanifest" />
+<meta name="theme-color" content="#E84B5D" />
+<meta name="description" content="Gestion des crédits clients et échéances" />
+<!-- iOS -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="lexpert" />
+<link rel="apple-touch-icon" href="/icons/icon-192.png" />
+<!-- Favicon -->
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+<link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png" />
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
@@ -2631,6 +2643,37 @@ document.getElementById('btn-scan-existing-client')?.addEventListener('click', (
 // ══════════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════════
+// ══════════════════════════════════════════════
+//  PWA — enregistrement du service worker
+// ══════════════════════════════════════════════
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js').then((reg) => {
+      // Détecte une nouvelle version et propose de recharger
+      reg.addEventListener('updatefound', () => {
+        const sw = reg.installing;
+        if (!sw) return;
+        sw.addEventListener('statechange', () => {
+          if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+            // Une nouvelle version est prête
+            if (confirm('Une nouvelle version de l\'application est disponible. Recharger maintenant ?')) {
+              sw.postMessage('SKIP_WAITING');
+              window.location.reload();
+            }
+          }
+        });
+      });
+    }).catch((err) => console.warn('SW registration failed:', err));
+  });
+  // Recharge automatique quand le SW prend le contrôle
+  let reloading;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloading) return;
+    reloading = true;
+    window.location.reload();
+  });
+}
+
 (async function init() {
   // Init flatpickr sur tous les inputs date avant tout
   initDatePickers();

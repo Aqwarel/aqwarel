@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Générateur d'icônes PWA — lexpert</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 720px; margin: 40px auto; padding: 20px; background: #f5f5f5; color: #222; }
+  h1 { font-weight: 500; }
+  .card { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 18px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  input[type=file] { padding: 10px; border: 1px dashed #aaa; border-radius: 6px; width: 100%; background: #fafafa; }
+  button { background: #E84B5D; color: white; border: 0; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+  button:disabled { background: #ccc; cursor: not-allowed; }
+  .preview { display: flex; gap: 20px; align-items: center; margin-top: 12px; }
+  .preview img { border: 1px solid #ddd; background: #fff; }
+  .muted { color: #666; font-size: 13px; }
+  ol li { margin-bottom: 8px; }
+  code { background: #eee; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<h1>Générateur d'icônes PWA</h1>
+
+<div class="card">
+  <strong>Mode d'emploi :</strong>
+  <ol>
+    <li>Sélectionnez votre logo (PNG ou JPG carré idéalement)</li>
+    <li>Cliquez sur <strong>Télécharger 192</strong> et <strong>Télécharger 512</strong></li>
+    <li>Placez les 2 fichiers dans <code>public/icons/</code> du projet, puis <code>git add icons/* && git commit && git push</code></li>
+  </ol>
+</div>
+
+<div class="card">
+  <label><strong>Choisir le logo :</strong></label><br><br>
+  <input type="file" id="file" accept="image/*">
+  <div class="preview" id="preview" style="display:none">
+    <canvas id="cv192" width="192" height="192"></canvas>
+    <canvas id="cv512" width="512" height="512"></canvas>
+  </div>
+  <div style="margin-top:14px">
+    <button id="dl192" disabled>Télécharger icon-192.png</button>
+    <button id="dl512" disabled>Télécharger icon-512.png</button>
+  </div>
+  <p class="muted">Astuce : sur Windows, faites un clic-droit sur l'image téléchargée → propriétés pour vérifier les dimensions.</p>
+</div>
+
+<script>
+const fileInput = document.getElementById('file');
+const cv192 = document.getElementById('cv192');
+const cv512 = document.getElementById('cv512');
+const dl192 = document.getElementById('dl192');
+const dl512 = document.getElementById('dl512');
+const preview = document.getElementById('preview');
+
+function drawCentered(ctx, img, size) {
+  ctx.clearRect(0, 0, size, size);
+  // Fond légèrement teinté pour les logos transparents (couleur app)
+  ctx.fillStyle = '#E84B5D';
+  ctx.fillRect(0, 0, size, size);
+  // Coupe ronde (optionnelle) — gardons rectangulaire pour respecter le logo
+  // Calcul du ratio pour centrer
+  const ratio = Math.min(size / img.width, size / img.height);
+  const w = img.width * ratio;
+  const h = img.height * ratio;
+  const x = (size - w) / 2;
+  const y = (size - h) / 2;
+  ctx.drawImage(img, x, y, w, h);
+}
+
+fileInput.addEventListener('change', (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      drawCentered(cv192.getContext('2d'), img, 192);
+      drawCentered(cv512.getContext('2d'), img, 512);
+      preview.style.display = 'flex';
+      dl192.disabled = false;
+      dl512.disabled = false;
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(f);
+});
+
+function download(canvas, filename) {
+  canvas.toBlob((blob) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }, 'image/png');
+}
+
+dl192.addEventListener('click', () => download(cv192, 'icon-192.png'));
+dl512.addEventListener('click', () => download(cv512, 'icon-512.png'));
+</script>
+
+</body>
+</html>
