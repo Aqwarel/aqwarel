@@ -2268,10 +2268,22 @@ async function changeUserRole(id, newRole, oldRole) {
 }
 
 async function deleteUser(id) {
-  if (!confirm('Supprimer cet utilisateur ?')) return;
+  const u = appUsers.find(x => x.id == id);
+  const label = u ? `${u.firstName} ${u.lastName||''} (${u.email})` : `#${id}`;
+  const msg = `SUPPRIMER DÉFINITIVEMENT l'utilisateur ${label} ?\n\n` +
+              `⚠️ Cette action est IRRÉVERSIBLE. La ligne sera supprimée de la base. ` +
+              `Les opérations enregistrées par cet utilisateur (clients créés, paiements, etc.) ` +
+              `gardent une trace mais perdent le lien vers l'utilisateur.\n\n` +
+              `OK pour confirmer.`;
+  if (!confirm(msg)) return;
   const data = await api('/users/' + id, { method: 'DELETE' });
-  if (data?.success) { await loadUsers(); renderUsersList(); }
-  else showToast(data?.message || 'Erreur.');
+  if (data?.success) {
+    await loadUsers();
+    renderUsersList();
+    showToast('Utilisateur supprimé.');
+  } else {
+    showToast(data?.message || 'Erreur lors de la suppression.');
+  }
 }
 
 // ══════════════════════════════════════════════

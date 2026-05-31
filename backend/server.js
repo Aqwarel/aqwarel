@@ -670,13 +670,16 @@ app.put('/api/users/:id', authMw, requireAdmin, async (req, res) => {
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
+// DELETE /api/users/:id — suppression définitive
+// Les references vers cet utilisateur (clients.created_by, credits.user_id,
+// payments.user_id, etc.) passent à NULL grâce aux contraintes FK SET NULL.
 app.delete('/api/users/:id', authMw, requireAdmin, async (req, res) => {
   try {
     const id = +req.params.id;
     if (id === req.user.id)
       return res.status(400).json({ success: false, message: 'Impossible de supprimer votre propre compte.' });
-    const aff = await db.update('users', { is_active: 0 }, 'id=?', [id]);
-    if (!aff) return res.status(404).json({ success: false, message: 'Utilisateur introuvable.' });
+    const [r] = await db.pool.execute('DELETE FROM users WHERE id = ?', [id]);
+    if (!r.affectedRows) return res.status(404).json({ success: false, message: 'Utilisateur introuvable.' });
     res.json({ success: true });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
