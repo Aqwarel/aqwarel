@@ -2206,6 +2206,7 @@ function renderUsersList() {
       <td><span style="font-size:12px;color:${u.active ? 'var(--success)' : 'var(--danger)'}">${u.active ? '● Actif' : '● Inactif'}</span></td>
       <td style="font-size:12px;color:var(--ink3)">${u.lastLogin||'—'}</td>
       <td class="td-actions">
+        <button class="btn-icon btn-sm" onclick="changeUserPassword(${u.id})" title="Changer le mot de passe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></button>
         ${!isMe ? `<button class="btn-icon btn-sm" onclick="toggleUserActive(${u.id},${u.active})" title="${u.active ? 'Désactiver' : 'Activer'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg></button>` : ''}
         ${!isMe ? `<button class="btn-icon btn-sm" onclick="deleteUser(${u.id})" title="Supprimer" style="color:var(--danger)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>` : ''}
       </td>
@@ -2267,6 +2268,26 @@ async function changeUserRole(id, newRole, oldRole) {
   } else {
     showToast(data?.message || 'Erreur.');
     renderUsersList();
+  }
+}
+
+async function changeUserPassword(id) {
+  const u = appUsers.find(x => x.id == id);
+  if (!u) return;
+  const label = `${u.firstName} ${u.lastName||''} (${u.email})`;
+  const pwd = prompt(`Nouveau mot de passe pour ${label} ?\n\n(8 caractères minimum, sera hashé en bcrypt)`);
+  if (pwd === null) return;
+  if (pwd.length < 8) return showToast('Mot de passe trop court (8 caractères minimum).');
+  const confirm2 = prompt('Confirmez le mot de passe :');
+  if (confirm2 !== pwd) return showToast('Les mots de passe ne correspondent pas.');
+  const data = await api('/users/' + id, {
+    method: 'PUT',
+    body: JSON.stringify({ password: pwd }),
+  });
+  if (data?.success) {
+    showToast('Mot de passe modifié.');
+  } else {
+    showToast(data?.message || 'Erreur lors de la modification.');
   }
 }
 
