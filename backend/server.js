@@ -44,6 +44,15 @@ app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 1000, standardHeaders: true, 
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
+// ── Anti-cache pour toutes les réponses /api/*
+// Empêche le navigateur et nginx de servir des données API obsolètes
+app.use('/api', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
+
 // ── Fichiers statiques (frontend)
 app.use(express.static(path.join(__dirname, '..', 'public')));
 

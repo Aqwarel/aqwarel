@@ -826,9 +826,12 @@ async function api(endpoint, options = {}) {
   const token = localStorage.getItem('lx_token');
   try {
     const res = await fetch(CONFIG.API_BASE + endpoint, {
+      cache: 'no-store',
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
         ...(token ? { 'Authorization': 'Bearer ' + token } : {}),
         ...(options.headers || {}),
       },
