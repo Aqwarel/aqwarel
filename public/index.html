@@ -619,6 +619,23 @@ td { padding: 11px 16px; font-size: 13px; color: var(--ink); vertical-align: mid
         <div id="settings-message" class="message"></div>
       </form>
     </div>
+
+    <div class="card" style="max-width:520px;margin-top:20px">
+      <h3>🔑 Changer mon mot de passe</h3>
+      <form id="my-password-form">
+        <label>Nouveau mot de passe
+          <input type="password" id="my-new-password" placeholder="8 caractères minimum" autocomplete="new-password" required minlength="8" />
+        </label>
+        <label>Confirmer le nouveau mot de passe
+          <input type="password" id="my-new-password-confirm" placeholder="Retaper le même mot de passe" autocomplete="new-password" required minlength="8" />
+        </label>
+        <button type="submit">Mettre à jour mon mot de passe</button>
+        <div id="my-password-message" class="message"></div>
+      </form>
+      <p class="muted" style="margin-top:10px;font-size:12px">
+        Une fois modifié, vous devrez utiliser le nouveau mot de passe à votre prochaine connexion. Aucun email de confirmation n'est envoyé.
+      </p>
+    </div>
   </section>
 </main>
 </div>
@@ -1695,6 +1712,27 @@ document.getElementById('settings-form').addEventListener('submit', async e => {
 
   if (data?.success) showMsg('settings-message', 'Paramètres enregistrés avec succès.', 'success');
   else showMsg('settings-message', 'Paramètres sauvegardés localement.', 'success');
+});
+
+// ── Changement de SON propre mot de passe (page Paramètres)
+document.getElementById('my-password-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!currentUser?.id) return showMsg('my-password-message', 'Session expirée, reconnectez-vous.', 'error');
+  const pwd  = document.getElementById('my-new-password').value;
+  const conf = document.getElementById('my-new-password-confirm').value;
+  if (pwd.length < 8)   return showMsg('my-password-message', 'Mot de passe trop court (8 caractères minimum).', 'error');
+  if (pwd !== conf)     return showMsg('my-password-message', 'Les deux mots de passe ne correspondent pas.', 'error');
+
+  const data = await api('/users/' + currentUser.id, {
+    method: 'PUT',
+    body: JSON.stringify({ password: pwd }),
+  });
+  if (data?.success) {
+    showMsg('my-password-message', 'Mot de passe modifié avec succès.', 'success');
+    document.getElementById('my-password-form').reset();
+  } else {
+    showMsg('my-password-message', data?.message || 'Erreur lors de la modification.', 'error');
+  }
 });
 
 // ══════════════════════════════════════════════
