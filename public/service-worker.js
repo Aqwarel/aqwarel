@@ -8,7 +8,7 @@
 //   - /api/* : network-only (les données sont dynamiques)
 // ============================================================
 
-const VERSION = 'v3';
+const VERSION = 'v4';
 const CACHE_STATIC  = `lexpert-static-${VERSION}`;
 const CACHE_RUNTIME = `lexpert-runtime-${VERSION}`;
 
