@@ -394,6 +394,16 @@ td { padding: 11px 16px; font-size: 13px; color: var(--ink); vertical-align: mid
         <table><thead><tr><th>Client</th><th>Produit</th><th>Restant</th><th></th></tr></thead><tbody id="db-late"></tbody></table>
       </div>
     </div>
+    <div class="card" style="margin-top:24px">
+      <div class="table-card-header">
+        <h3>📱 Rappels WhatsApp à envoyer (3 prochains jours)</h3>
+        <span class="muted" id="db-wa-count">0</span>
+      </div>
+      <table>
+        <thead><tr><th>Date due</th><th>Client</th><th>Téléphone</th><th>Produit</th><th>Reste à payer</th><th>Action</th></tr></thead>
+        <tbody id="db-wa-reminders"></tbody>
+      </table>
+    </div>
   </section>
 
   <!-- CREDITS -->
@@ -1312,6 +1322,7 @@ function renderEcheances() {
       <td>${fmtDate(e.paid_at)||'—'}</td>
       <td class="td-actions">
         ${canPay && e.status !== 'payee' ? `<button class="btn btn-sm btn-primary" onclick="payEcheance(${e.id})">Encaisser</button>` : ''}
+        ${e.status !== 'payee' && formatPhoneForWa(e.client_phone) ? `<button class="btn-icon" onclick="sendWhatsappReminder(${e.id})" title="Rappel WhatsApp" style="color:#25D366">📱</button>` : ''}
         ${canEdit   ? `<button class="btn-icon" onclick="editEcheance(${e.id})" title="Modifier">✎</button>` : ''}
         ${canDelete ? `<button class="btn-icon" onclick="deleteEcheance(${e.id})" title="Supprimer" style="color:var(--danger)">✕</button>` : ''}
       </td>
@@ -1577,6 +1588,42 @@ document.addEventListener('click', e => {
 // Un crédit est "en retard" si son statut DB est 'retard' OU si sa
 // prochaine échéance est dans le passé (le statut DB n'est rafraîchi
 // qu'au paiement, donc on calcule aussi côté front pour rester juste).
+// ══════════════════════════════════════════════
+//  RAPPELS WHATSAPP
+// ══════════════════════════════════════════════
+// Convertit un téléphone marocain en format international sans + ni espaces
+// 0612345678 → 212612345678 ; +212612345678 → 212612345678
+function formatPhoneForWa(phone) {
+  if (!phone) return null;
+  let p = String(phone).replace(/[\s\-().]/g, '');
+  if (p.startsWith('00'))       p = p.slice(2);
+  else if (p.startsWith('+'))   p = p.slice(1);
+  else if (p.startsWith('0'))   p = '212' + p.slice(1);   // Maroc par défaut
+  p = p.replace(/\D/g, '');
+  return p.length >= 9 ? p : null;
+}
+
+// Génère le lien wa.me avec message pré-rempli pour rappel d'échéance
+function whatsappReminderUrl(e) {
+  const phone = formatPhoneForWa(e.client_phone);
+  if (!phone) return null;
+  const company = (appSettings && appSettings.companyName) || 'lexpert';
+  const due     = parseFloat(e.amount || 0);
+  const paid    = parseFloat(e.paid_amount || 0);
+  const rest    = Math.max(0, due - paid);
+  const msg = `Bonjour ${e.client_name || ''}, rappel : votre mensualité de ${fmt(rest)} pour le crédit ${e.product_name || ''} est due le ${fmtDate(e.due_date)}. Merci de passer régler. — ${company}`;
+  return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+}
+
+// Ouvre WhatsApp avec le message pré-rempli (Web sur PC, app sur mobile)
+function sendWhatsappReminder(echeanceId) {
+  const e = appEcheances.find(x => x.id == echeanceId);
+  if (!e) return;
+  const url = whatsappReminderUrl(e);
+  if (!url) return showToast('Téléphone client manquant ou invalide.');
+  window.open(url, '_blank');
+}
+
 function isCreditLate(cr, todayStr) {
   if (cr.status === 'annule' || cr.status === 'paye') return false;
   if (cr.status === 'retard') return true;
@@ -1630,6 +1677,33 @@ function renderDashboard() {
           <td style="font-weight:600;color:var(--danger)">${fmt(cr.remaining)}</td>
           <td></td>
         </tr>`).join('');
+  }
+
+  // Rappels WhatsApp : échéances dues dans les 3 prochains jours
+  const waTbody = document.getElementById('db-wa-reminders');
+  if (waTbody) {
+    const in3 = (() => { const d = new Date(); d.setDate(d.getDate()+3); return d.toISOString().slice(0,10); })();
+    const upcoming = appEcheances.filter(e => {
+      const dd = (e.due_date || '').slice(0,10);
+      return dd && dd >= today && dd <= in3 && e.status !== 'payee';
+    }).sort((a,b) => (a.due_date||'').localeCompare(b.due_date||''));
+    set('db-wa-count', String(upcoming.length));
+    waTbody.innerHTML = !upcoming.length
+      ? '<tr><td colspan="6" style="text-align:center;color:var(--ink3);padding:20px">Aucun rappel à envoyer dans les 3 prochains jours.</td></tr>'
+      : upcoming.map(e => {
+          const rest = Math.max(0, parseFloat(e.amount||0) - parseFloat(e.paid_amount||0));
+          const hasPhone = !!formatPhoneForWa(e.client_phone);
+          return `<tr>
+            <td>${fmtDate(e.due_date)||'—'}</td>
+            <td>${e.client_name||'—'}</td>
+            <td>${e.client_phone||'<span style="color:var(--ink3)">manquant</span>'}</td>
+            <td>${e.product_name||'—'}</td>
+            <td style="font-weight:600">${fmt(rest)}</td>
+            <td>${hasPhone
+              ? `<button class="btn btn-sm" style="background:#25D366;color:#fff;border:0" onclick="sendWhatsappReminder(${e.id})">📱 Envoyer rappel</button>`
+              : '<span class="muted" style="font-size:11px">N° invalide</span>'}</td>
+          </tr>`;
+        }).join('');
   }
 }
 
