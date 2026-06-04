@@ -1649,6 +1649,48 @@ function whatsappReminderUrl(e) {
   return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
 }
 
+// Génère le lien wa.me avec le contrat de crédit complet (français + arabe)
+// Récupère le credit + échéances depuis le backend pour avoir l'échéancier généré
+async function whatsappContractUrl(creditId) {
+  const data = await api('/credits/' + creditId);
+  if (!data?.success) return null;
+  const cr = data.credit;
+  const ech = data.echeances || [];
+  const phone = formatPhoneForWa(cr.phone);
+  if (!phone) return { url: null, reason: 'phone' };
+
+  const company = (appSettings && appSettings.companyName) || 'lexpert';
+  const total = parseFloat(cr.total_price || 0);
+  const down  = parseFloat(cr.down_payment || 0);
+  const rest  = total - down;
+  const mens  = parseFloat(cr.installment_amount || 0);
+
+  let msg = `📋 CONTRAT DE CRÉDIT N° CR-${String(cr.id).padStart(5,'0')}\n`;
+  msg += `${company} — ${fmtDate(cr.created_at)}\n\n`;
+  msg += `👤 Client : ${cr.client_name || ''}\n`;
+  msg += `📱 Tél : ${cr.phone || ''}\n`;
+  if (cr.cin) msg += `🆔 CIN : ${cr.cin}\n`;
+  msg += `\n📦 Produit : ${cr.product_name || ''}\n`;
+  msg += `💰 Prix total : ${fmt(total)}\n`;
+  msg += `💵 Avance versée : ${fmt(down)}\n`;
+  msg += `📊 Montant à crédit : ${fmt(rest)}\n`;
+  msg += `📅 Nombre d'échéances : ${cr.num_installments}\n`;
+  msg += `💸 Mensualité : ${fmt(mens)}\n`;
+  msg += `🗓 Date de début : ${fmtDate(cr.start_date)}\n\n`;
+  msg += `═══════════════════\n📅 ÉCHÉANCIER\n═══════════════════\n`;
+  ech.forEach(e => {
+    msg += `${e.installment_no}) ${fmtDate(e.due_date)} — ${fmt(parseFloat(e.amount))}\n`;
+  });
+  msg += `\n🤝 Merci de respecter les échéances convenues.\n`;
+  if (appSettings?.phone1) msg += `📞 Contact : ${appSettings.phone1}\n`;
+  msg += `\n═══════════════════\n`;
+  msg += `السلام عليكم،\n`;
+  msg += `نشكركم على ثقتكم في ${company}.\nيرجى الاحتفاظ بهذه الرسالة كنسخة من العقد.\nنرجو الالتزام بآجال الدفع المتفق عليها.\n\n`;
+  msg += `تحياتنا — ${company}`;
+
+  return { url: `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, reason: null };
+}
+
 // Ouvre WhatsApp avec le message pré-rempli (Web sur PC, app sur mobile)
 function sendWhatsappReminder(echeanceId) {
   const e = appEcheances.find(x => x.id == echeanceId);
@@ -1950,6 +1992,7 @@ document.getElementById('credit-add-form')?.addEventListener('submit', async e =
 
   if (data?.success) {
     showMsg('cr-message','Crédit créé avec succès. Échéances générées.','success');
+    const newCreditId = data.id;
     document.getElementById('credit-add-form').reset();
     document.getElementById('cr-client').value = '';
     document.getElementById('cr-down').value = 0;
@@ -1961,6 +2004,18 @@ document.getElementById('credit-add-form')?.addEventListener('submit', async e =
     renderDashboard();
     renderAnalysis();
     renderClientList();
+
+    // Envoi automatique du contrat sur WhatsApp du client
+    if (newCreditId) {
+      const result = await whatsappContractUrl(newCreditId);
+      if (result?.url) {
+        // Ouvre WhatsApp avec le contrat pré-rempli
+        window.open(result.url, '_blank');
+        showToast('WhatsApp ouvert avec le contrat — cliquez sur Envoyer pour l\'envoyer au client.');
+      } else if (result?.reason === 'phone') {
+        showToast('Crédit créé. Pas de WhatsApp envoyé : numéro de téléphone client manquant ou invalide.');
+      }
+    }
   } else {
     showMsg('cr-message', data?.message || 'Erreur lors de la création.','error');
   }
