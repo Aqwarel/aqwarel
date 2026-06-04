@@ -1693,9 +1693,10 @@ async function whatsappContractUrl(creditId) {
   return { url: `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, reason: null };
 }
 
-// Génère un PDF du contrat de crédit et le télécharge automatiquement
-// Retourne le nom du fichier généré (pour info utilisateur)
-async function downloadCreditContractPdf(creditId) {
+// Génère le PDF du contrat de crédit avec jsPDF
+// Si autoDownload=true, télécharge le fichier sur le PC
+// Retourne {doc, fileName, blob} pour usage ultérieur (upload, download...)
+async function buildCreditContractPdf(creditId, autoDownload = false) {
   if (!window.jspdf || !window.jspdf.jsPDF) {
     showToast('Bibliothèque PDF non chargée (vérifiez votre connexion internet).');
     return null;
@@ -1827,8 +1828,32 @@ async function downloadCreditContractPdf(creditId) {
   );
 
   const fileName = `Contrat-CR-${String(cr.id).padStart(5, '0')}-${(cr.client_name || 'client').replace(/\s+/g, '_')}.pdf`;
-  doc.save(fileName);
-  return fileName;
+  if (autoDownload) doc.save(fileName);
+  // Retourne le doc + dataURL base64 pour upload vers le backend
+  const dataUrl = doc.output('datauristring');
+  return { doc, fileName, dataUrl, credit: cr };
+}
+
+// Alias backward-compatible : génère + télécharge en local
+async function downloadCreditContractPdf(creditId) {
+  const r = await buildCreditContractPdf(creditId, true);
+  return r ? r.fileName : null;
+}
+
+// Génère le PDF, l'upload sur le serveur et retourne l'URL publique
+async function uploadCreditContractPdf(creditId) {
+  const r = await buildCreditContractPdf(creditId, false);
+  if (!r) return null;
+  const resp = await api(`/credits/${creditId}/contract-pdf`, {
+    method: 'POST',
+    body: JSON.stringify({ pdf: r.dataUrl }),
+  });
+  if (!resp?.success) {
+    showToast(resp?.message || 'Erreur upload PDF.');
+    return null;
+  }
+  // resp.url est relatif (ex /contracts/CR-00091-abc.pdf). On retourne l'URL absolue.
+  return { url: window.location.origin + resp.url, fileName: r.fileName, credit: r.credit };
 }
 
 // Ouvre WhatsApp avec le message pré-rempli (Web sur PC, app sur mobile)
@@ -2145,36 +2170,35 @@ document.getElementById('credit-add-form')?.addEventListener('submit', async e =
     renderAnalysis();
     renderClientList();
 
-    // 1) Génère et télécharge le PDF du contrat
-    // 2) Ouvre WhatsApp avec un message invitant le client à consulter le contrat
+    // 1) Génère le PDF côté client et l'upload sur le serveur (URL publique avec token)
+    // 2) Ouvre WhatsApp avec le lien direct vers le PDF dans le message
+    //    Le client n'a qu'à cliquer sur le lien : le PDF s'ouvre dans son navigateur
     if (newCreditId) {
-      const fileName = await downloadCreditContractPdf(newCreditId);
-      if (fileName) {
-        showToast(`PDF téléchargé : ${fileName}`);
-        // Récupère les infos pour le message WhatsApp
-        const cdata = await api('/credits/' + newCreditId);
-        const cr = cdata?.credit;
+      const uploaded = await uploadCreditContractPdf(newCreditId);
+      if (uploaded?.url) {
+        const cr = uploaded.credit;
         const phone = formatPhoneForWa(cr?.phone);
         if (phone) {
           const company = (appSettings && appSettings.companyName) || 'lexpert';
           const msg =
 `Bonjour ${cr.client_name || ''},
 
-Veuillez trouver ci-joint votre CONTRAT DE CRÉDIT N° CR-${String(cr.id).padStart(5,'0')} pour le produit "${cr.product_name}" d'un montant total de ${fmt(parseFloat(cr.total_price))}.
+Votre CONTRAT DE CRÉDIT N° CR-${String(cr.id).padStart(5,'0')} pour le produit "${cr.product_name}" (montant total ${fmt(parseFloat(cr.total_price))}) est disponible en PDF.
 
-Vous trouverez dans le PDF l'échéancier complet de vos ${cr.num_installments} mensualités de ${fmt(parseFloat(cr.installment_amount))}.
+📄 Cliquez ici pour le consulter :
+${uploaded.url}
+
+Vous y trouverez l'échéancier complet de vos ${cr.num_installments} mensualités de ${fmt(parseFloat(cr.installment_amount))}.
 
 السلام عليكم،
-نشكركم على ثقتكم في ${company}. تجدون رفقته عقد الائتمان الخاص بكم. نرجو الالتزام بآجال الدفع المتفق عليها.
+نشكركم على ثقتكم في ${company}. تجدون عقد الائتمان الخاص بكم عبر الرابط أعلاه. نرجو الالتزام بآجال الدفع المتفق عليها.
 
 تحياتنا — ${company}`;
-          const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
-          window.open(url, '_blank');
-          setTimeout(() => {
-            alert(`📄 Le PDF du contrat a été téléchargé (${fileName}).\n\nDans WhatsApp qui vient de s'ouvrir :\n1. Cliquez sur le bouton 📎 (joindre)\n2. Sélectionnez "Document"\n3. Choisissez le fichier ${fileName} dans votre dossier Téléchargements\n4. Cliquez Envoyer`);
-          }, 800);
+          const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+          window.open(waUrl, '_blank');
+          showToast('WhatsApp ouvert avec le lien du contrat — cliquez Envoyer.');
         } else {
-          showToast('Crédit créé et PDF téléchargé. Pas de WhatsApp envoyé : numéro client manquant.');
+          showToast(`Crédit créé. PDF disponible ici : ${uploaded.url} (numéro client manquant pour WhatsApp).`);
         }
       }
     }

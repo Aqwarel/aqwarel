@@ -11,8 +11,14 @@ const helmet      = require('helmet');
 const compression = require('compression');
 const rateLimit   = require('express-rate-limit');
 const path        = require('path');
+const fs          = require('fs');
+const crypto      = require('crypto');
 const jwt         = require('jsonwebtoken');
 const bcrypt      = require('bcryptjs');
+
+// Dossier où sont stockés les PDF de contrats générés
+const CONTRACTS_DIR = path.join(__dirname, '..', 'public', 'contracts');
+if (!fs.existsSync(CONTRACTS_DIR)) fs.mkdirSync(CONTRACTS_DIR, { recursive: true });
 
 const db          = require('./config/db');
 const authRoutes  = require('./routes/auth.routes');
@@ -377,6 +383,37 @@ app.post('/api/credits', authOptional, async (req, res) => {
     });
 
     res.status(201).json({ success: true, id: result });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+// POST /api/credits/:id/contract-pdf
+// Le frontend génère le PDF (via jsPDF) puis l'envoie ici en base64.
+// On le stocke dans public/contracts/CR-XXXXX-<token>.pdf et on retourne l'URL.
+// Le token aléatoire (16 hex chars = 64 bits) sert de "security by obscurity"
+// pour empêcher de deviner le PDF d'un autre crédit.
+app.post('/api/credits/:id/contract-pdf', authOptional, async (req, res) => {
+  try {
+    const id = +req.params.id;
+    const { pdf } = req.body;
+    if (!pdf || typeof pdf !== 'string' || !pdf.startsWith('data:application/pdf;base64,')) {
+      return res.status(400).json({ success: false, message: 'PDF invalide.' });
+    }
+    const b64 = pdf.slice('data:application/pdf;base64,'.length);
+    const buf = Buffer.from(b64, 'base64');
+    // Garde-fou : max 10 Mo
+    if (buf.length > 10 * 1024 * 1024) {
+      return res.status(413).json({ success: false, message: 'PDF trop volumineux (max 10 Mo).' });
+    }
+    // Vérifie que le crédit existe
+    const row = await db.queryOne('SELECT id FROM credits WHERE id = ?', [id]);
+    if (!row) return res.status(404).json({ success: false, message: 'Crédit introuvable.' });
+
+    const token = crypto.randomBytes(8).toString('hex');
+    const fileName = `CR-${String(id).padStart(5, '0')}-${token}.pdf`;
+    fs.writeFileSync(path.join(CONTRACTS_DIR, fileName), buf);
+    res.json({ success: true, url: `/contracts/${fileName}`, fileName });
   } catch (e) {
     res.status(500).json({ success: false, message: e.message });
   }
