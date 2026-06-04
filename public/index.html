@@ -19,6 +19,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/fr.js"></script>
@@ -1691,6 +1693,144 @@ async function whatsappContractUrl(creditId) {
   return { url: `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, reason: null };
 }
 
+// Génère un PDF du contrat de crédit et le télécharge automatiquement
+// Retourne le nom du fichier généré (pour info utilisateur)
+async function downloadCreditContractPdf(creditId) {
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    showToast('Bibliothèque PDF non chargée (vérifiez votre connexion internet).');
+    return null;
+  }
+  const data = await api('/credits/' + creditId);
+  if (!data?.success) { showToast('Impossible de charger le crédit.'); return null; }
+  const cr  = data.credit;
+  const ech = data.echeances || [];
+  const company = (appSettings && appSettings.companyName) || 'lexpert';
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const W = 210, M = 18;
+
+  // En-tête entreprise
+  doc.setFillColor(232, 75, 93); // #E84B5D
+  doc.rect(0, 0, W, 28, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(20);
+  doc.text(company.toUpperCase(), M, 18);
+  doc.setFontSize(10);
+  if (appSettings?.address) doc.text(appSettings.address, M, 24);
+
+  // Titre du document
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(16);
+  doc.text('CONTRAT DE CRÉDIT', W / 2, 42, { align: 'center' });
+  doc.setFontSize(10);
+  doc.setTextColor(100, 100, 100);
+  doc.text(`N° CR-${String(cr.id).padStart(5, '0')}  —  ${fmtDate(cr.created_at)}`, W / 2, 48, { align: 'center' });
+
+  // Section Client
+  let y = 60;
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(11);
+  doc.setFont(undefined, 'bold');
+  doc.text('CLIENT', M, y);
+  doc.setFont(undefined, 'normal');
+  y += 6;
+  doc.setFontSize(10);
+  const clientLines = [
+    `Nom : ${cr.client_name || ''}`,
+    `N° client : #${String(cr.client_display_id || '').padStart(3, '0')}`,
+    `Téléphone : ${cr.phone || '—'}`,
+  ];
+  if (cr.cin)     clientLines.push(`CIN : ${cr.cin}`);
+  if (cr.address) clientLines.push(`Adresse : ${cr.address}${cr.city ? ', ' + cr.city : ''}`);
+  clientLines.forEach(l => { doc.text(l, M, y); y += 5; });
+
+  // Section Produit et conditions
+  y += 5;
+  doc.setFontSize(11);
+  doc.setFont(undefined, 'bold');
+  doc.text('PRODUIT ET CONDITIONS FINANCIÈRES', M, y);
+  doc.setFont(undefined, 'normal');
+  y += 6;
+  doc.setFontSize(10);
+  const total = parseFloat(cr.total_price || 0);
+  const down  = parseFloat(cr.down_payment || 0);
+  const rest  = total - down;
+  const mens  = parseFloat(cr.installment_amount || 0);
+  const financLines = [
+    `Produit : ${cr.product_name || ''}`,
+    `Prix total : ${fmt(total)}`,
+    `Avance versée : ${fmt(down)}`,
+    `Montant à crédit : ${fmt(rest)}`,
+    `Nombre d'échéances : ${cr.num_installments}`,
+    `Mensualité : ${fmt(mens)}`,
+    `Date de début : ${fmtDate(cr.start_date)}`,
+  ];
+  if (cr.note) financLines.push(`Observation : ${cr.note}`);
+  financLines.forEach(l => { doc.text(l, M, y); y += 5; });
+
+  // Tableau échéancier
+  y += 4;
+  doc.setFontSize(11);
+  doc.setFont(undefined, 'bold');
+  doc.text('ÉCHÉANCIER', M, y);
+  doc.setFont(undefined, 'normal');
+  y += 3;
+
+  const tableData = ech.map(e => [
+    String(e.installment_no),
+    fmtDate(e.due_date),
+    fmt(parseFloat(e.amount)),
+    'À payer',
+  ]);
+  doc.autoTable({
+    startY: y,
+    head: [['N°', 'Date due', 'Montant', 'Statut']],
+    body: tableData,
+    margin: { left: M, right: M },
+    styles: { fontSize: 9, cellPadding: 2 },
+    headStyles: { fillColor: [240, 236, 228], textColor: [60, 60, 60], fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [250, 250, 250] },
+  });
+
+  let finalY = doc.lastAutoTable.finalY || y + 30;
+  finalY += 8;
+
+  // Total restant
+  doc.setFontSize(11);
+  doc.setFont(undefined, 'bold');
+  doc.text(`Reste à payer : ${fmt(parseFloat(cr.remaining))}`, M, finalY);
+  doc.setFont(undefined, 'normal');
+
+  // Clause + signatures
+  finalY += 10;
+  doc.setFontSize(8);
+  doc.setTextColor(100, 100, 100);
+  const clause = `Le client s'engage à régler les mensualités aux dates indiquées ci-dessus. Tout retard de paiement supérieur à 7 jours pourra entraîner la résiliation du crédit conformément aux conditions générales de ${company}.`;
+  const wrapped = doc.splitTextToSize(clause, W - 2 * M);
+  doc.text(wrapped, M, finalY);
+  finalY += wrapped.length * 4 + 12;
+
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(10);
+  doc.text('Signature client :', M, finalY);
+  doc.text(`Cachet et signature ${company} :`, W / 2 + 10, finalY);
+  doc.line(M, finalY + 16, M + 70, finalY + 16);
+  doc.line(W / 2 + 10, finalY + 16, W / 2 + 80, finalY + 16);
+
+  // Pied de page
+  doc.setFontSize(8);
+  doc.setTextColor(150, 150, 150);
+  doc.text(
+    `Document généré par ${company} le ${new Date().toLocaleString('fr-FR')}`,
+    W / 2, 290, { align: 'center' }
+  );
+
+  const fileName = `Contrat-CR-${String(cr.id).padStart(5, '0')}-${(cr.client_name || 'client').replace(/\s+/g, '_')}.pdf`;
+  doc.save(fileName);
+  return fileName;
+}
+
 // Ouvre WhatsApp avec le message pré-rempli (Web sur PC, app sur mobile)
 function sendWhatsappReminder(echeanceId) {
   const e = appEcheances.find(x => x.id == echeanceId);
@@ -2005,15 +2145,37 @@ document.getElementById('credit-add-form')?.addEventListener('submit', async e =
     renderAnalysis();
     renderClientList();
 
-    // Envoi automatique du contrat sur WhatsApp du client
+    // 1) Génère et télécharge le PDF du contrat
+    // 2) Ouvre WhatsApp avec un message invitant le client à consulter le contrat
     if (newCreditId) {
-      const result = await whatsappContractUrl(newCreditId);
-      if (result?.url) {
-        // Ouvre WhatsApp avec le contrat pré-rempli
-        window.open(result.url, '_blank');
-        showToast('WhatsApp ouvert avec le contrat — cliquez sur Envoyer pour l\'envoyer au client.');
-      } else if (result?.reason === 'phone') {
-        showToast('Crédit créé. Pas de WhatsApp envoyé : numéro de téléphone client manquant ou invalide.');
+      const fileName = await downloadCreditContractPdf(newCreditId);
+      if (fileName) {
+        showToast(`PDF téléchargé : ${fileName}`);
+        // Récupère les infos pour le message WhatsApp
+        const cdata = await api('/credits/' + newCreditId);
+        const cr = cdata?.credit;
+        const phone = formatPhoneForWa(cr?.phone);
+        if (phone) {
+          const company = (appSettings && appSettings.companyName) || 'lexpert';
+          const msg =
+`Bonjour ${cr.client_name || ''},
+
+Veuillez trouver ci-joint votre CONTRAT DE CRÉDIT N° CR-${String(cr.id).padStart(5,'0')} pour le produit "${cr.product_name}" d'un montant total de ${fmt(parseFloat(cr.total_price))}.
+
+Vous trouverez dans le PDF l'échéancier complet de vos ${cr.num_installments} mensualités de ${fmt(parseFloat(cr.installment_amount))}.
+
+السلام عليكم،
+نشكركم على ثقتكم في ${company}. تجدون رفقته عقد الائتمان الخاص بكم. نرجو الالتزام بآجال الدفع المتفق عليها.
+
+تحياتنا — ${company}`;
+          const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+          window.open(url, '_blank');
+          setTimeout(() => {
+            alert(`📄 Le PDF du contrat a été téléchargé (${fileName}).\n\nDans WhatsApp qui vient de s'ouvrir :\n1. Cliquez sur le bouton 📎 (joindre)\n2. Sélectionnez "Document"\n3. Choisissez le fichier ${fileName} dans votre dossier Téléchargements\n4. Cliquez Envoyer`);
+          }, 800);
+        } else {
+          showToast('Crédit créé et PDF téléchargé. Pas de WhatsApp envoyé : numéro client manquant.');
+        }
       }
     }
   } else {
