@@ -397,10 +397,16 @@ app.post('/api/credits/:id/contract-pdf', authOptional, async (req, res) => {
   try {
     const id = +req.params.id;
     const { pdf } = req.body;
-    if (!pdf || typeof pdf !== 'string' || !pdf.startsWith('data:application/pdf;base64,')) {
-      return res.status(400).json({ success: false, message: 'PDF invalide.' });
+    if (!pdf || typeof pdf !== 'string' || !pdf.startsWith('data:application/pdf')) {
+      return res.status(400).json({ success: false, message: 'PDF invalide (préfixe absent).' });
     }
-    const b64 = pdf.slice('data:application/pdf;base64,'.length);
+    // jsPDF retourne data:application/pdf;filename=xxx.pdf;base64,XXX
+    // ou data:application/pdf;base64,XXX selon la version → on découpe après ";base64,"
+    const idx = pdf.indexOf(';base64,');
+    if (idx < 0) {
+      return res.status(400).json({ success: false, message: 'PDF invalide (base64 absent).' });
+    }
+    const b64 = pdf.slice(idx + ';base64,'.length);
     const buf = Buffer.from(b64, 'base64');
     // Garde-fou : max 10 Mo
     if (buf.length > 10 * 1024 * 1024) {
