@@ -321,10 +321,6 @@ th:last-child, td.td-actions { min-width: 200px; }
     <div class="auth-form-wrap">
       <div class="auth-form-title">Bienvenue</div>
       <div class="auth-form-sub">Connectez-vous pour accéder à votre espace</div>
-      <div class="auth-tabs">
-        <button class="auth-tab active" onclick="switchAuthTab('login')">Connexion</button>
-        <button class="auth-tab" onclick="switchAuthTab('register')">Créer un compte</button>
-      </div>
       <!-- LOGIN -->
       <div class="auth-pane active" id="pane-login">
         <div class="auth-error-box" id="login-error"></div>
@@ -337,27 +333,6 @@ th:last-child, td.td-actions { min-width: 200px; }
           <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" />
         </div>
         <button class="auth-submit" id="login-btn" onclick="doLogin()">Se connecter</button>
-        <div class="auth-demo-hint">
-          <strong>Comptes de démonstration</strong>
-          <div class="auth-hint-row">
-            <button class="auth-hint-chip" onclick="fillDemo('admin@lexpert.ma','admin123')">Admin</button>
-            <button class="auth-hint-chip" onclick="fillDemo('manager@lexpert.ma','manager123')">Manager</button>
-            <button class="auth-hint-chip" onclick="fillDemo('caissier@lexpert.ma','caissier123')">Caissier</button>
-            <button class="auth-hint-chip" onclick="fillDemo('viewer@lexpert.ma','viewer123')">Lecteur</button>
-          </div>
-        </div>
-      </div>
-      <!-- REGISTER -->
-      <div class="auth-pane" id="pane-register">
-        <div class="auth-error-box" id="register-error"></div>
-        <div class="inline-grid">
-          <div class="field"><label class="field-label">Prénom</label><input type="text" id="reg-firstname" placeholder="Prénom" /></div>
-          <div class="field"><label class="field-label">Nom</label><input type="text" id="reg-lastname" placeholder="Nom" /></div>
-        </div>
-        <div class="field"><label class="field-label">Email</label><input type="email" id="reg-email" placeholder="votre@email.com" /></div>
-        <div class="field"><label class="field-label">Mot de passe</label><input type="password" id="reg-password" placeholder="8 caractères minimum" /></div>
-        <div class="field"><label class="field-label">Confirmer</label><input type="password" id="reg-confirm" placeholder="Répétez le mot de passe" /></div>
-        <button class="auth-submit" id="register-btn" onclick="doRegister()">Créer mon compte</button>
       </div>
     </div>
   </div>
@@ -923,17 +898,6 @@ function can(permission) {
 // ══════════════════════════════════════════════
 //  AUTH
 // ══════════════════════════════════════════════
-function switchAuthTab(tab) {
-  document.querySelectorAll('.auth-tab').forEach((t,i) => t.classList.toggle('active', (i===0&&tab==='login')||(i===1&&tab==='register')));
-  document.getElementById('pane-login').classList.toggle('active', tab==='login');
-  document.getElementById('pane-register').classList.toggle('active', tab==='register');
-}
-
-function fillDemo(email, password) {
-  document.getElementById('login-email').value = email;
-  document.getElementById('login-password').value = password;
-}
-
 function showAuthError(panelId, msg) {
   const el = document.getElementById(panelId);
   el.textContent = msg;
@@ -977,47 +941,6 @@ async function doLogin() {
 }
 
 // ── doRegister — connecté à l'API backend ──
-async function doRegister() {
-  const firstName = document.getElementById('reg-firstname').value.trim();
-  const lastName  = document.getElementById('reg-lastname').value.trim();
-  const email     = document.getElementById('reg-email').value.trim();
-  const password  = document.getElementById('reg-password').value;
-  const confirm   = document.getElementById('reg-confirm').value;
-
-  if (!firstName || !email || !password)
-    return showAuthError('register-error', 'Veuillez remplir tous les champs obligatoires.');
-  if (password.length < 8)
-    return showAuthError('register-error', 'Le mot de passe doit contenir au moins 8 caractères.');
-  if (password !== confirm)
-    return showAuthError('register-error', 'Les mots de passe ne correspondent pas.');
-
-  const btn = document.getElementById('register-btn');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>Création…';
-
-  try {
-    const res = await fetch(CONFIG.API_BASE + '/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ firstName, lastName, email, password }),
-    });
-    const data = await res.json();
-
-    if (!data.success) {
-      showAuthError('register-error', data.message || 'Erreur lors de la création du compte.');
-    } else {
-      localStorage.setItem('lx_token', data.token);
-      currentUser = data.user;
-      await launchApp();
-    }
-  } catch (err) {
-    showAuthError('register-error', 'Impossible de contacter le serveur.');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Créer mon compte';
-  }
-}
-
 // ── Auto-login si token valide ──
 async function tryAutoLogin() {
   const token = localStorage.getItem('lx_token');

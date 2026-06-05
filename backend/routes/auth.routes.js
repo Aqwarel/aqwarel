@@ -49,37 +49,14 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// POST /api/auth/register
-router.post('/register', async (req, res) => {
-  const { firstName, lastName, email, password } = req.body;
-  if (!firstName || !email || !password)
-    return res.status(400).json({ success: false, message: 'Champs obligatoires manquants.' });
-  if (password.length < 8)
-    return res.status(400).json({ success: false, message: 'Mot de passe trop court (8 min).' });
-
-  try {
-    const exists = await db.queryOne('SELECT id FROM users WHERE email = ?', [email.toLowerCase()]);
-    if (exists) return res.status(409).json({ success: false, message: 'Email déjà utilisé.' });
-
-    const hash = await bcrypt.hash(password, 12);
-    const viewerRole = await db.queryOne("SELECT id FROM roles WHERE name = 'viewer'");
-    const id = await db.insert('users', {
-      first_name: firstName.trim(), last_name: lastName?.trim() || null,
-      email: email.toLowerCase().trim(), password_hash: hash,
-      role_id: viewerRole?.id || 4, is_active: 1
-    });
-
-    const token = jwt.sign(
-      { id, email: email.toLowerCase(), role: 'viewer', firstName: firstName.trim(), lastName: lastName?.trim() || '' },
-      process.env.JWT_SECRET,
-      { expiresIn: '8h' }
-    );
-
-    res.status(201).json({ success: true, token, user: { id, email, firstName, role: 'viewer' } });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: 'Erreur serveur.' });
-  }
+// POST /api/auth/register — DÉSACTIVÉ
+// L'auto-inscription est désactivée. Seul un admin peut créer un utilisateur
+// via l'interface Utilisateurs (qui appelle POST /api/users avec auth admin).
+router.post('/register', (_req, res) => {
+  res.status(403).json({
+    success: false,
+    message: 'Inscription publique désactivée. Contactez un administrateur pour obtenir un compte.'
+  });
 });
 
 // POST /api/auth/logout
